@@ -46,8 +46,28 @@ services:
       - "8000:8000"
     #TODO remove the following line (just for development)
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      - syntria
+  
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nicegui
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
         condition: service_healthy
     networks:
       - syntria
@@ -59,11 +79,3 @@ volumes:
 networks:
   syntria:
     driver: bridge
-
-
-  # frontend-web:
-  #   build: ./frontend # La cartella dove hai appena messo il Dockerfile di NGINX
-  #   ports:
-  #     - 80:80 # Potrai vedere il sito andando su http://localhost
-  #   depends_on:
-  #     - fastapi # Facciamo partire il frontend solo se il backend è già in piedi
