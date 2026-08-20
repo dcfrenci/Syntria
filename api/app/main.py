@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, status
-from fastapi.middleware.cors import CORSMiddleware  # <-- 1. Import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base, engine, get_db
-from app.routers import items, users, categories, persons, auth
+from app.routers import items, users, categories, persons, auth, reservations, quotes
 import app.models
 
 @asynccontextmanager
@@ -39,6 +39,9 @@ app.include_router(items.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(persons.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(reservations.router, prefix="/api/v1")
+app.include_router(quotes.router, prefix="/api/v1")
+
 
 @app.get("/health", tags=["Health"], status_code=status.HTTP_200_OK)
 async def health_check(db: AsyncSession = Depends(get_db)):
