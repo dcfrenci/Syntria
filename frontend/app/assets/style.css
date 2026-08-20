@@ -1,0 +1,47 @@
+/* Import a modern sans-serif font from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+    font-family: 'Inter', sans-serif;
+    /* Smooth background color matching standard Figma gray */
+    background-color: #f9fafb; 
+}
+
+/* Custom Scrollbar to make the app feel native */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Custom Menu Hover & Active States 
+  As specified in your design:
+  - Hover: Element elevates or underlines
+  - Active: Background becomes darker
+*/
+.menu-btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.menu-btn:hover {
+    transform: translateY(-2px); /* 'Eleva' effect */
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.menu-btn-active {
+    background-color: #e5e7eb !important; /* 'Più scuro' effect */
+    color: #111827 !important;
+    font-weight: 600;
+}
