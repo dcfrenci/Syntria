@@ -1,7 +1,7 @@
 from nicegui import ui
 
 def reminders_page():
-    """Renders the Reminders view[cite: 4]."""
+    """Renders the Reminders view."""
     with ui.column().classes('p-8 w-full max-w-4xl'):
         ui.label('Reminders').classes('text-3xl font-bold mb-6 text-gray-800')
 

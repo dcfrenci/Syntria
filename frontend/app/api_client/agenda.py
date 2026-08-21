@@ -1,4 +1,4 @@
-from app.api_client.base import APIClient
+from api_client.base import APIClient
 
 class AgendaClient:
     @staticmethod

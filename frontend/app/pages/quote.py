@@ -1,5 +1,5 @@
 from nicegui import ui
-from app.components.tooth_chart import tooth_selection_chart
+from components.tooth_chart import tooth_selection_chart
 
 def quote_page():
     """Renders the Customize Quote view"""

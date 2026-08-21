@@ -1,5 +1,5 @@
 from nicegui import ui
-from app.api_client.agenda import AgendaClient
+from api_client.agenda import AgendaClient
 
 async def agenda_page():
     """Renders the Agenda calendar view."""

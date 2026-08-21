@@ -1,6 +1,6 @@
 from nicegui import ui
-from app.api_client.services import ServicesClient
-from app.components.modals import service_modal
+from api_client.services import ServicesClient
+from components.modals import service_modal
 
 async def pricing_page():
     """Renders the Pricing & Services management view."""

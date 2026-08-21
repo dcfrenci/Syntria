@@ -40,12 +40,12 @@ services:
     restart: always
     env_file:
       - .env
+    #TODO remove the following line (just for development) and volumes ? 
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     volumes:
       - ./api/app:/app/app
     ports:
       - "8000:8000"
-    #TODO remove the following line (just for development)
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
       interval: 15s
@@ -64,6 +64,9 @@ services:
       dockerfile: Dockerfile
     container_name: nicegui
     restart: always
+    command: ["python", "app/main.py"]
+    volumes:
+      - ./frontend:/app
     ports:
       - "8080:8080"
     depends_on:

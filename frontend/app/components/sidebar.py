@@ -36,7 +36,7 @@ def create_sidebar(active_route: str = '/'):
             # ).props('flat')
 
         with ui.column().classes('w-full gap-2'):
-            menu_item('home', 'Home', '/')
+            menu_item('home', 'Home', '/home')
             menu_item('menu_book', 'Agenda', '/agenda')
             menu_item('attach_money', 'Pricing', '/pricing')
             menu_item('edit_document', 'Customize quote', '/quote')

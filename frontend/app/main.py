@@ -1,15 +1,16 @@
 from contextlib import contextmanager
-from nicegui import ui, app
+from nicegui import ui
 
 # Import your shared components
-from app.components.sidebar import create_sidebar
+from components.sidebar import create_sidebar
 
 # Import your page content functions
-from app.pages.home import home_page
-from app.pages.pricing import pricing_page
-from app.pages.agenda import agenda_page
-from app.pages.quote import quote_page
-from app.pages.reminders import reminders_page
+from pages.home import home_page
+from pages.pricing import pricing_page
+from pages.agenda import agenda_page
+from pages.quote import quote_page
+from pages.reminders import reminders_page
+from pages.settings import settings_page
 
 @contextmanager
 def frame(page_title: str, active_route: str):
@@ -29,30 +30,35 @@ def frame(page_title: str, active_route: str):
 
 # --- Routes Registration ---
 
-@ui.page('/')
+@ui.page('/home')
 def home_route():
-    with frame('Home - Syntria', active_route='/'):
+    with frame(page_title='Home', active_route='/home'):
         home_page()
 
 @ui.page('/agenda')
 async def agenda_route():
-    with frame('Agenda - Syntria', active_route='/agenda'):
+    with frame(page_title='Agenda', active_route='/agenda'):
         await agenda_page()
 
 @ui.page('/pricing')
 async def pricing_route():
-    with frame('Pricing - Syntria', active_route='/pricing'):
+    with frame(page_title='Pricing', active_route='/pricing'):
         await pricing_page()
 
 @ui.page('/quote')
 def quote_route():
-    with frame('Quotes - Syntria', active_route='/quote'):
+    with frame(page_title='Quotes', active_route='/quote'):
         quote_page()
 
 @ui.page('/reminders')
 def reminders_route():
-    with frame('Reminders - Syntria', active_route='/reminders'):
+    with frame(page_title='Reminders', active_route='/reminders'):
         reminders_page()
+        
+@ui.page('/settings')
+def settings_page():
+    with frame(page_title='Settings', active_route='/settings'):
+        settings_page()
 
 # Initialize the UI server
 ui.run(title="Syntria", port=8080, host="0.0.0.0", reload=True)
