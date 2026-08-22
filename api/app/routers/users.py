@@ -18,6 +18,79 @@ from app.schemas.users import (
 
 router = APIRouter(prefix="/users", tags=["Users & Staff"])
 
+# ---------------------------------------------------------
+# Bootstrap Endpoints
+# ---------------------------------------------------------
+@router.post("/bootstrap_user", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def bootstrap_first_admin(
+    payload: UserCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    count = (await db.execute(select(func.count(User.id)))).scalar_one()
+    if count > 0:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bootstrap already completed.")
+    # ... same creation logic as create_user, minus the current_user dependency
+    
+    # 1. Check if Person exists
+    person = await db.get(Person, payload.person_id)
+    if not person:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Person ID {payload.person_id} not found.",
+        )
+    
+    # 2. Check if Person already has a User account
+    user_check = await db.execute(
+        select(User).where(User.person_id == payload.person_id)
+    )
+    if user_check.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A staff user account is already linked to this person.",
+        )
+    
+    # 3. Check if Role exists
+    role = await db.get(Role, payload.role_id)
+    if not role:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Role ID {payload.role_id} not found.",
+        )
+    
+    # 4. Create User with hashed password
+    new_user = User(
+        person_id=payload.person_id,
+        role_id=payload.role_id,
+        hashed_password=get_password_hash(payload.password),
+        is_active=payload.is_active,
+    )
+    db.add(new_user)
+    await db.flush()
+    await db.refresh(new_user, ["person", "role"])
+    return new_user
+
+
+@router.post("/bootstrap_role", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
+async def create_role(
+    payload: RoleCreate,
+    db: AsyncSession = Depends(get_db),
+):  
+    count = (await db.execute(select(func.count(Role.id)))).scalar_one()
+    if count > 0:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bootstrap already completed.")
+    
+    existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Role '{payload.name}' already exists.",
+        )
+
+    role = Role(name=payload.name)
+    db.add(role)
+    await db.flush()
+    return role
+
 
 # ---------------------------------------------------------
 # Role Endpoints

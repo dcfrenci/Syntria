@@ -1,16 +1,35 @@
 from contextlib import contextmanager
-from nicegui import ui
+from nicegui import app, ui
+
+from fastapi import Request
+from fastapi.responses import RedirectResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Import your shared components
 from components.sidebar import create_sidebar
 
 # Import your page content functions
+from pages.login import login_page
 from pages.home import home_page
 from pages.pricing import pricing_page
 from pages.agenda import agenda_page
 from pages.quote import quote_page
 from pages.reminders import reminders_page
 from pages.settings import settings_page
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if not app.storage.user.get('authenticated', False):
+            if request.url.path not in ['/login'] and not request.url.path.startswith('/_nicegui'):
+                return RedirectResponse('/login')
+        return await call_next(request)
+
+
+app.add_static_files('/assets', 'app/assets')
+
+app.add_middleware(AuthMiddleware)
+
 
 @contextmanager
 def frame(page_title: str, active_route: str):
@@ -19,16 +38,18 @@ def frame(page_title: str, active_route: str):
     # Background color of the whole app
     ui.query('body').classes('bg-white') 
     
-    ui.add_head_html('<link href="/assets/style.css" rel="stylesheet">')
     
     # Render the sidebar with the correct active hover state
     create_sidebar(active_route=active_route)
     
     # Create the main content container
-    with ui.column().classes('w-full max-w-7xl mx-auto h-screen overflow-y-auto pl-64'): 
+    with ui.column().classes('w-full max-w-7xl mx-auto h-screen overflow-y-auto'): 
         yield
 
 # --- Routes Registration ---
+@ui.page('/login')
+def auth_route():
+    login_page()
 
 @ui.page('/home')
 def home_route():
@@ -56,9 +77,9 @@ def reminders_route():
         reminders_page()
         
 @ui.page('/settings')
-def settings_page():
+def settings_route():
     with frame(page_title='Settings', active_route='/settings'):
         settings_page()
 
 # Initialize the UI server
-ui.run(title="Syntria", port=8080, host="0.0.0.0", reload=True)
+ui.run(title="Syntria", storage_secret='your_secure_random_secrets', port=8080, host="0.0.0.0", reload=True)

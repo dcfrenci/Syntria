@@ -64,6 +64,9 @@ services:
       dockerfile: Dockerfile
     container_name: nicegui
     restart: always
+    env_file:
+      - .env
+    # TODO remove command and volumes
     command: ["python", "app/main.py"]
     volumes:
       - ./frontend:/app
