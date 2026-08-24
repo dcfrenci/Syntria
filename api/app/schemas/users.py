@@ -1,24 +1,9 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.persons import PersonResponse
+from app.schemas.roles import RoleResponse
 
 
-# --- Role Schemas ---
-class RoleBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=50, examples=["Admin"])
-
-
-class RoleCreate(RoleBase):
-    pass
-
-
-class RoleResponse(RoleBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# --- User Schemas ---
 class UserBase(BaseModel):
     person_id: int = Field(..., description="ID of the Person this login belongs to", examples=[1])
     role_id: int = Field(..., description="ID of the assigned Role", examples=[1])

@@ -4,16 +4,10 @@ from sqlalchemy import Date, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.reminders import ReminderPreference
 
 if TYPE_CHECKING:
     from app.models.users import User
-
-
-class ReminderPreference(Base):
-    __tablename__ = "reminder_preferences"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
 
 
 class Person(Base):

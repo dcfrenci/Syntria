@@ -7,9 +7,8 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models import Role, User, Person
 from app.routers.auth import get_current_user
+from app.schemas.roles import RoleCreate, RoleResponse
 from app.schemas.users import (
-    RoleCreate,
-    RoleResponse,
     UserCreate,
     UserListResponse,
     UserResponse,
@@ -79,37 +78,6 @@ async def create_role(
     if count > 0:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bootstrap already completed.")
     
-    existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Role '{payload.name}' already exists.",
-        )
-
-    role = Role(name=payload.name)
-    db.add(role)
-    await db.flush()
-    return role
-
-
-# ---------------------------------------------------------
-# Role Endpoints
-# ---------------------------------------------------------
-@router.get("/roles", response_model=list[RoleResponse])
-async def list_roles(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    result = await db.execute(select(Role).order_by(Role.name))
-    return result.scalars().all()
-
-
-@router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def create_role(
-    payload: RoleCreate,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
     existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))
     if existing.scalar_one_or_none():
         raise HTTPException(

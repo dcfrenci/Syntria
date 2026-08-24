@@ -5,8 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base, engine, get_db
-from app.routers import items, users, categories, persons, auth, reservations, quotes
-import app.models
+from app.routers import items, users, categories, persons, auth, reservations, quotes, roles, reminders
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,6 +34,8 @@ app.add_middleware(
 
 # Mount Routers
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(roles.router, prefix="/api/v1")
+app.include_router(reminders.router, prefix="/api/v1")
 app.include_router(items.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
 app.include_router(persons.router, prefix="/api/v1")

@@ -7,15 +7,7 @@ from app.core.database import Base
 
 if TYPE_CHECKING:
     from app.models.persons import Person
-
-
-class Role(Base):
-    __tablename__ = "roles"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)  # Admin, Dentist, Secretary
-
-    users: Mapped[list["User"]] = relationship("User", back_populates="role")
+    from app.models.roles import Role
 
 
 class User(Base):
@@ -34,7 +26,7 @@ class User(Base):
     )
 
     # Relationships
-    role: Mapped[Role] = relationship("Role", back_populates="users", lazy="selectin")
+    role: Mapped["Role"] = relationship("Role", back_populates="users", lazy="selectin")
     person: Mapped["Person"] = relationship("Person", back_populates="user_account", lazy="selectin")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

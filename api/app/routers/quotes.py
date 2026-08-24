@@ -2,6 +2,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.models.persons import Person
@@ -75,10 +76,20 @@ async def create_quote(
 
     # 6. Save total amount back to quote
     quote.total_amount = total_amount
-    await db.flush()
-    await db.refresh(quote)
+    await db.commit() 
 
-    return quote
+    # 7. Eagerly load the relationships to satisfy the QuoteResponse schema
+    stmt = (
+        select(Quote)
+        .where(Quote.id == quote.id)
+        .options(
+            selectinload(Quote.quote_items).selectinload(QuoteItem.item)
+        )
+    )
+    result = await db.execute(stmt)
+    quote_with_relations = result.scalar_one()
+
+    return quote_with_relations
 
 
 @router.get("/", response_model=QuoteListResponse, status_code=status.HTTP_200_OK)

@@ -1,7 +1,9 @@
 from app.models.categories import Category
 from app.models.items import Item
-from app.models.persons import Person, ReminderPreference
-from app.models.users import Role, User
+from app.models.persons import Person
+from app.models.reminders import ReminderPreference
+from app.models.users import User
+from app.models.roles import Role
 from app.models.reservations import Reservation
 from app.models.quotes import Quote, QuoteItem
 
