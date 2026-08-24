@@ -1,4 +1,5 @@
 import httpx
+from nicegui import app
 
 # In Docker, your FastAPI backend container is accessible via http://api:8000
 BASE_URL = "http://api:8000/api/v1"
@@ -7,7 +8,8 @@ class APIClient:
     """Centralized HTTP client for communicating with the FastAPI backend."""
     
     @staticmethod
-    async def get(endpoint: str, token: str | None = None) -> dict | list | None:
+    async def get(endpoint: str) -> dict | list | None:
+        token = app.storage.user['token'] if app.storage.user.get('authenticated', False) else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient() as client:
             try:
@@ -19,7 +21,8 @@ class APIClient:
                 return None
 
     @staticmethod
-    async def post(endpoint: str, data: dict, token: str | None = None) -> dict | None:
+    async def post(endpoint: str, data: dict) -> dict | None:
+        token = app.storage.user['token'] if app.storage.user.get('authenticated', False) else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient() as client:
             try:
@@ -31,7 +34,8 @@ class APIClient:
                 return None
 
     @staticmethod
-    async def patch(endpoint: str, data: dict, token: str | None = None) -> dict | None:
+    async def patch(endpoint: str, data: dict) -> dict | None:
+        token = app.storage.user['token'] if app.storage.user.get('authenticated', False) else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient() as client:
             try:
@@ -43,7 +47,8 @@ class APIClient:
                 return None
 
     @staticmethod
-    async def delete(endpoint: str, token: str | None = None) -> bool:
+    async def delete(endpoint: str) -> bool:
+        token = app.storage.user['token'] if app.storage.user.get('authenticated', False) else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient() as client:
             try:

@@ -1,0 +1,27 @@
+"quote_items": [
+    {
+      "item_id": 0,
+      "quantity": 1,
+      "discount": "0.00",
+      "id": 0,
+      "unit_price": "-00000000000000000000000000000033547756284481643653.2428376885500372317193860343",
+      "item": {
+        "name": "Dental Cleaning",
+        "description": "string",
+        "price": "80",
+        "category_id": 1,
+        "is_active": true,
+        "is_specific": false,
+        "id": 0,
+        "created_at": "2026-08-24T17:14:06.856Z",
+        "updated_at": "2026-08-24T17:14:06.856Z",
+        "category": {
+          "name": "Orthodontics",
+          "description": "Teeth alignment and braces",
+          "is_active": true,
+          "id": 0,
+          "created_at": "2026-08-24T17:14:06.856Z",
+          "updated_at": "2026-08-24T17:14:06.856Z"
+        }
+      }
+    }

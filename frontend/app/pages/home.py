@@ -1,4 +1,8 @@
+from datetime import datetime
+
 from nicegui import ui
+from api_client.quotes import QuotesClient
+from api_client.services import ServicesClient
 
 def home_page():
     """Renders the Home dashboard view."""
@@ -7,9 +11,11 @@ def home_page():
         ui.sub_pages({'/home': quotes, '/home/quote_create': quote_create}).classes('w-full')
     
 
-def quotes():
+async def quotes():
     with ui.column().classes('w-full h-screen'):
         ui.label('Quote').classes('text-3xl font-bold mb-5')
+        
+        quotes = await QuotesClient.get_quotes()
         
         async def action(page):
             row = await quotes.get_selected_row()
@@ -22,17 +28,23 @@ def quotes():
         
         quotes = ui.aggrid({
             'columnDefs': [
-                {'headerName': 'Id', 'field': 'id', 'hide': True},
-                {'headerName': 'Name', 'field': 'Name', 'sortable': True},
-                {'headerName': 'Surname', 'field': 'Surname', 'sortable': True, 'filter': 'agTextColumnFilter', 'floatingFilter': True},
-                {'headerName': 'Date', 'field': 'Date', 'sortable': True},
+                {'field': 'id', 'hide': True},
+                {'headerName': 'Name', 'field': 'patient.first_name', 'sortable': True},
+                {'headerName': 'Surname', 'field': 'patient.last_name', 'sortable': True, 'filter': 'agTextColumnFilter', 'floatingFilter': True},
+                {'headerName': 'Date', 'field': 'created_at', 'sortable': True, 
+                    ':valueFormatter': """
+                        params => {
+                            if (!params.value) return '';
+                            const d = new Date(params.value);
+                            const day = String(d.getDate()).padStart(2, '0');
+                            const month = String(d.getMonth() + 1).padStart(2, '0');
+                            const year = d.getFullYear();
+                            return `${day}/${month}/${year}`;
+                        }
+                    """
+                },
             ],
-            'rowData': [
-                # TODO implement
-                {'Name': 'Francesco', 'Surname': 'Della Casa', 'Date': '01/01/2002'},
-                {'Name': 'Matteo', 'Surname': 'Della Casa', 'Date': '03/10/2005'},
-                {'Name': 'Antonella', 'Surname': 'Della Bella', 'Date': '18/02/1966'},
-            ],
+            'rowData': quotes,
             'rowSelection': {
                 'mode': 'singleRow',
                 'checkboxes': False,
@@ -40,48 +52,97 @@ def quotes():
             },
         })
         
+        
         with ui.row():
             ui.button('New', icon='r_add', on_click=lambda: ui.navigate.to('/home/quote_create'))
+            ui.button('Edit', icon='r_edit', on_click=lambda: action(''))
             ui.button('Print', icon='r_print', on_click=lambda: action(''))
             ui.button('Download', icon='r_download', on_click=lambda: action(''))
-            ui.button('Edit', icon='r_edit', on_click=lambda: action(''))
             ui.button('Delete', icon='r_delete', on_click=lambda: action(''))
         
+
+    
+async def quote_create():
+    
+    with ui.column().classes('w-full'):
         
+        ui.label('Dashboard New Quote').classes('text-lg font-bold mb-5')
     
-    
-    
-    
-def quote_create():
-    
-    ui.label('Dashboard New Quote').classes('w-full')
-    ui.link('Go to quote', '/home')
-    
-    with ui.grid(columns='1fr 1fr').classes('w-full gap-10'):
+        with ui.grid(columns='1fr 1fr').classes('w-full gap-10'):
         
-        def add(row):
-            print(row)
-            grid_selected.options['rowData'].append(row)
-            grid_selected.update()
-            grid_selected.run_grid_method('ensureIndexVisible', len(grid_selected.options['rowData']) - 1)
-        
-        grid_services = ui.aggrid({
-            'columnDefs': [
-                {'field': 'Name', 'editable': False, 'sortable': True},
-                {'field': 'Price', 'editable': False, 'sortable': False},
-            ],
-            'rowData': [
-                # TODO Implement loading services
-                {'Name': 'Service 1', 'Price': '100.5'},
-                {'Name': 'Service 2', 'Price': '150.75'},
-                {'Name': 'Service 3', 'Price': '300'},    
-            ],
-        }).on('rowDobleClicked', lambda event: add(event.args["data"]), args='data')
-        
-        grid_selected = ui.aggrid({
-            'columnDefs': [
-                {'field': 'Name', 'editable': False, 'sortable': True},
-                {'field': 'Price', 'editable': False, 'sortable': False},    
-            ],
-            'rowData': [],
-        })
+            services = await ServicesClient.get_items()
+            services_selected = {}
+            
+            def refresh_selected_grid():
+                grid_selected.options['rowData'] = list(services_selected.values())
+                grid_selected.update()
+            
+            async def add():
+                row = await grid_services.get_selected_row()   
+                if row:
+                    if row['id'] in services_selected.keys():
+                        services_selected[row['id']]['quantity'] += 1
+                    else:
+                        services_selected[row['id']] = {'id': row['id'], 'name': row['name'], 'quantity': 1, 'discount': 0, 'teeth': []}
+                    refresh_selected_grid()
+                else:
+                    ui.notify('Select a service before')
+            
+            
+            with ui.row().classes('w-full'):
+                ui.label('Select services').classes('text-lg font-bold mb-2')
+                
+                grid_services = ui.aggrid({
+                    'columnDefs': [
+                        {'field': 'id', 'hide': True},
+                        {'headerName': 'Name', 'field': 'name'},
+                        {'headerName': 'Category', 'field': 'category.name'},
+                    ],
+                    'rowData': services,
+                    'rowSelection': {
+                        'mode': 'singleRow',
+                        'checkboxes': False,
+                        'enableClickSelection': True,
+                    },
+                })
+                
+                ui.button('Add', icon='r_add', on_click=lambda: add())
+                
+            async def remove():
+                row = await grid_selected.get_selected_row()
+                print(row, flush=True)
+                if row:
+                    if services_selected[row['id']]['quantity'] > 1:
+                        services_selected[row['id']]['quantity'] -= 1
+                    else:
+                        del services_selected[row['id']]  
+                    refresh_selected_grid()
+                else:
+                    ui.notify('Select a service before')
+                
+            with ui.row().classes('w-full'):
+                ui.label('Selected services').classes('text-lg font-bold mb-2')
+                
+                grid_selected = ui.aggrid({
+                    'columnDefs': [
+                        {'field': 'id', 'hide': True},
+                        {'headerName': 'Name', 'field': 'name'},
+                        {'headerName': 'Amount', 'field': 'quantity'},
+                        {'headerName': 'Teeth', 'field': 'teeth'},
+                    ],
+                    'rowData': list(services_selected.values()),
+                    'rowSelection': {
+                        'mode': 'singleRow',
+                        'checkboxes': False,
+                        'enableClickSelection': True,
+                    },
+                })
+                
+                ui.button('Delete', icon='r_delete', on_click=lambda: remove())
+                
+    with ui.card().classes('w-full p-4 border border-gray-300 rounded-lg shadow-inner'):
+            ui.label('Tooth Selection').classes('text-lg font-bold mb-4')
+            
+            # Placeholder for the ISO 3950 / Palmer grid[cite: 6]
+            with ui.row().classes('w-full justify-center items-center bg-gray-50 h-64 rounded'):
+                ui.label('Interactive Dental Grid UI will render here').classes('text-gray-400')
