@@ -8,40 +8,46 @@ def home_page():
     
 
 def quotes():
-    ui.label('Dashboard Home').classes('text-3xl font-bold mb-6 text-gray-800')
-    with ui.card().classes('w-full p-6 border border-gray-200 rounded-xl shadow-none'):
-        ui.label('Welcome to the Syntria Dashboard.').classes('text-lg')
-        ui.label('Use the left menu to navigate through your services, agenda, and quotes.').classes('text-gray-500 mt-2')
+    with ui.column().classes('w-full h-screen'):
+        ui.label('Quote').classes('text-3xl font-bold mb-5')
         
-    ui.link('Go to quote', '/home/quote_create')
-    
-    with ui.column().classes('w-full'):
-        ui.label('Quote')
-        
-        def action(row, action):
-            if row != None:
+        async def action(page):
+            row = await quotes.get_selected_row()
+            if row:
                 ui.notify(str(row))
-                pass
+                ui.notify(f"{row['Name']}, {row['Surname']}")
+                ui.navigate.to(page)
             else:
                 ui.notify('Select a quote before')
         
         quotes = ui.aggrid({
             'columnDefs': [
-                {'headerName': 'Name', 'field': 'Name'},
-                {'headerName': 'Surname', 'field': 'Surname'},
-                {'headerName': 'Date', 'field': 'Date'},
+                {'headerName': 'Id', 'field': 'id', 'hide': True},
+                {'headerName': 'Name', 'field': 'Name', 'sortable': True},
+                {'headerName': 'Surname', 'field': 'Surname', 'sortable': True, 'filter': 'agTextColumnFilter', 'floatingFilter': True},
+                {'headerName': 'Date', 'field': 'Date', 'sortable': True},
             ],
             'rowData': [
-                
+                # TODO implement
+                {'Name': 'Francesco', 'Surname': 'Della Casa', 'Date': '01/01/2002'},
+                {'Name': 'Matteo', 'Surname': 'Della Casa', 'Date': '03/10/2005'},
+                {'Name': 'Antonella', 'Surname': 'Della Bella', 'Date': '18/02/1966'},
             ],
+            'rowSelection': {
+                'mode': 'singleRow',
+                'checkboxes': False,
+                'enableClickSelection': True,
+            },
         })
         
         with ui.row():
-            ui.button('New', icon='r_add', on_click=lambda: action(quotes.get_selected_row(), '/home/quote_create'))
+            ui.button('New', icon='r_add', on_click=lambda: ui.navigate.to('/home/quote_create'))
+            ui.button('Print', icon='r_print', on_click=lambda: action(''))
+            ui.button('Download', icon='r_download', on_click=lambda: action(''))
+            ui.button('Edit', icon='r_edit', on_click=lambda: action(''))
+            ui.button('Delete', icon='r_delete', on_click=lambda: action(''))
         
-        # .on('rowDoubleClicked', lambda event: quotes.run_grid_method())
         
-        pass
     
     
     
@@ -51,7 +57,7 @@ def quote_create():
     ui.label('Dashboard New Quote').classes('w-full')
     ui.link('Go to quote', '/home')
     
-    with ui.grid(columns='1fr 1fr').classes('w-full gap-20'):
+    with ui.grid(columns='1fr 1fr').classes('w-full gap-10'):
         
         def add(row):
             print(row)
@@ -70,7 +76,7 @@ def quote_create():
                 {'Name': 'Service 2', 'Price': '150.75'},
                 {'Name': 'Service 3', 'Price': '300'},    
             ],
-        }).on('rowClicked', lambda event: add(event.args["data"]), args='data')
+        }).on('rowDobleClicked', lambda event: add(event.args["data"]), args='data')
         
         grid_selected = ui.aggrid({
             'columnDefs': [
