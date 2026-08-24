@@ -45,7 +45,7 @@ async def create_item(
 async def get_items(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int | None = Query(default=None, ge=1),
     category_id: int | None = Query(default=None, description="Filter by Category ID"),
     is_active: bool | None = Query(default=None),
     is_specific: bool | None = Query(default=None),
@@ -58,15 +58,21 @@ async def get_items(
     if is_specific is not None:
         filters.append(Item.is_specific == is_specific)
 
-    query = select(Item).options(selectinload(Item.category))
-    count_query = select(func.count(Item.id))
-
-    if filters:
-        query = query.where(*filters)
-        count_query = count_query.where(*filters)
-
+    count_query = select(func.count(Item.id)).where(*filters)
     total_count = (await db.execute(count_query)).scalar_one()
-    items = (await db.execute(query.order_by(Item.id).offset(skip).limit(limit))).scalars().all()
+    
+    items_query = (
+        select(Item)
+        .options(selectinload(Item.category))
+        .where(*filters)
+        .order_by(Item.id)
+        .offset(skip)
+    )
+    
+    if limit is not None:
+        items_query = items_query.limit(limit)
+    
+    items = (await db.execute(items_query)).scalars().all()        
 
     return {"total": total_count, "items": items}
 
