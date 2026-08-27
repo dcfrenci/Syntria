@@ -5,6 +5,7 @@ from PIL import Image
 from nicegui import ui
 from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
+from api_client.persons import PersonsClient
 
 def home_page():
     """Renders the Home dashboard view."""
@@ -61,6 +62,10 @@ async def quotes():
             ui.button('Print', icon='r_print', on_click=lambda: action(''))
             ui.button('Download', icon='r_download', on_click=lambda: action(''))
             ui.button('Delete', icon='r_delete', on_click=lambda: action(''))
+            
+        
+
+            
 
     
 async def quote_create():
@@ -68,6 +73,53 @@ async def quote_create():
     with ui.column().classes('w-full'):
         
         ui.label('Dashboard New Quote').classes('text-3xl font-bold mb-5')
+        
+        with ui.grid(columns='1fr 1fr').classes('w-full gap-10'):
+            
+            persons = {p['id']: p for p in await PersonsClient.get_persons()}
+            person_selected = {'patient_id': None}
+            
+            with ui.column():
+                
+                ui.label('Select Patient').classes('text-lg font-bold mb-2')
+                
+                with ui.card().classes('w-full'):
+                    names = {k: f'{v['first_name']} {v['last_name']}' for k, v in persons.items()}
+                    ui.select(options=names, with_input=True).bind_value(person_selected, 'patient_id').classes('w-full')
+                
+                with ui.card().classes('w-full'):
+                    ui.date_input(placeholder='Valid period', range_input=True).classes('w-full')
+
+            with ui.column():
+                ui.label('Patient Details').classes('text-lg font-bold mb-2')
+                with ui.card().classes('w-full h-full flex flex-center'):
+                    with ui.row():
+                        ui.label('Name: ')
+                        ui.label().bind_text_from(
+                            person_selected, 'patient_id',
+                            backward=lambda id: f"{persons[id]['first_name']} {persons[id]['last_name']}" if id in persons else ''
+                        )
+                    with ui.row():
+                        ui.label('Birth date: ')
+                        ui.label().bind_text_from(
+                            person_selected, 'patient_id',
+                            backward=lambda id: str(persons[id].get('birth_date', '')) if id in persons else ''
+                        )
+                    with ui.row():
+                        ui.label('Email: ')
+                        ui.label().bind_text_from(
+                            person_selected, 'patient_id',
+                            backward=lambda id: str(persons[id].get('email', '')) if id in persons else ''
+                        )
+                    with ui.row():
+                        ui.label('Phone: ')
+                        ui.label().bind_text_from(
+                            person_selected, 'patient_id',
+                            backward=lambda id: str(persons[id].get('phone_number', '')) if id in persons else ''
+                        )
+        
+        
+            
     
         with ui.grid(columns='1fr 1fr').classes('w-full gap-10'):
         

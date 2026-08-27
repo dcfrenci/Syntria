@@ -115,11 +115,11 @@ def create_users(token: str, roles_ids: list, persons_ids: list):
     ]
     return post_data("users", users, token)
 
-def create_persons(token: str):
+def create_persons(token: str, reminders_ids: list):
     persons = [
-        {"first_name": "Alice", "last_name": "Smith", "phone": "555-0101", "email": "alice@client.com"},
-        {"first_name": "Bob", "last_name": "Jones", "phone": "555-0102", "email": "bob@client.com"},
-        {"first_name": "Charlie", "last_name": "Brown", "phone": "555-0103", "email": "charlie@client.com"}
+        {"first_name": "Alice", "last_name": "Smith", "phone_number": "3395550101", "email": "alice@client.com", "birth_date": "1969-10-21", "reminder_preference_id": reminders_ids[0]},
+        {"first_name": "Bob", "last_name": "Jones", "phone_number": "3395550102", "email": "bob@client.com", "birth_date": "1999-05-11", "reminder_preference_id": reminders_ids[1]},
+        {"first_name": "Charlie", "last_name": "Brown", "phone_number": "3395550103", "email": "charlie@client.com", "birth_date": "1999-01-17", "reminder_preference_id": reminders_ids[2]}
     ]
     return post_data("persons", persons, token)
 
@@ -243,13 +243,13 @@ if __name__ == "__main__":
     # 3. Proceed only if authentication was successful
     if token:
         roles_ids = create_roles(token)
-        persons_ids = create_persons(token)
+        remainders_ids = create_reminders(token)
+        persons_ids = create_persons(token, remainders_ids)
         users_ids = create_users(token, roles_ids, persons_ids)
         categories_ids = create_categories(token)
         items_ids = create_items(token, categories_ids)
         quotes_ids = create_quotes(token, persons_ids, items_ids)
         reservations_ids = create_reservations(token, persons_ids)
-        remainders_ids = create_reminders(token)
         print("Database population complete.")
     else:
         print("Aborting database population due to authentication failure.")
