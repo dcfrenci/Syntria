@@ -1,5 +1,4 @@
 from nicegui import ui
-from components.tooth_chart import tooth_selection_chart
 
 def quote_page():
     """Renders the Customize Quote view"""
@@ -16,6 +15,3 @@ def quote_page():
                 ui.button('Create Quote', on_click=lambda: ui.notify('Quote Draft Created')).classes(
                     'bg-gray-900 text-white rounded-xl py-2 mt-4'
                 )
-
-            with ui.column().classes('w-2/3'):
-                tooth_selection_chart()
