@@ -12,6 +12,7 @@ class QuoteItemBase(BaseModel):
     item_id: int = Field(..., description="ID of the selected Item/Service")
     quantity: int = Field(default=1, gt=0)
     discount: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
+    teeth: list[int] | None = Field(default=None, description="List of teeth for this specific item")
 
 class QuoteItemCreate(QuoteItemBase):
     pass

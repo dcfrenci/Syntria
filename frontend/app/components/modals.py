@@ -1,4 +1,5 @@
 from nicegui import ui
+from components.style import Style
 
 def service_modal(on_save_callback):
     """Generates the 'New Service' modal popup."""
@@ -17,4 +18,27 @@ def service_modal(on_save_callback):
                 dialog.close()
             ])
             
+    return dialog
+
+
+def confirmation_model(title: str, description: str, on_save_callback):
+    """Generates a customizable modal popup."""
+    
+    with ui.dialog() as dialog, ui.card().classes('w-full max-w-md p-6'):
+        ui.label(title).classes(Style.h1())
+        
+        ui.label(description).classes(Style.p())
+        
+        async def handle_cancel():
+            await on_save_callback(False)
+            dialog.close()
+        
+        async def handle_confirm():
+            await on_save_callback(True)
+            dialog.close()
+        
+        with ui.row().classes(Style.row_end()):
+            ui.button('Cancel', on_click=handle_cancel).props('outline')
+            ui.button('Confirm', on_click=handle_confirm)
+        
     return dialog

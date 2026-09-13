@@ -1,5 +1,6 @@
 from datetime import datetime
 from PIL import Image
+import traceback
 
 
 from nicegui import ui
@@ -7,72 +8,107 @@ from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
 from components.teeth_selection import teeth_selection
+from components.modals import confirmation_model
 
 
 def home_page():
     """Renders the Home dashboard view."""
     with ui.column().classes("p-8 w-full"):
 
-        ui.sub_pages({"/home": quotes, "/home/quote_create": quote_create}).classes(
-            "w-full"
-        )
+        ui.sub_pages(
+            {
+                "/home": quotes,
+                "/home/quote_create": quote_create,
+                "/home/quote_edit/{id}": quote_edit,
+            }
+        ).classes("w-full")
 
 
 async def quotes():
     with ui.column().classes("w-full h-screen"):
         ui.label("Quote").classes("text-3xl font-bold mb-5")
 
-        quotes = await QuotesClient.get_quotes()
+        async def load_quotes():
+            row_quotes = await QuotesClient.get_quotes()
+            quotes = [
+                {
+                    "id": quote["id"],
+                    "name": f"{quote["patient"]["first_name"]} {quote["patient"]["last_name"]}",
+                    "created_at": datetime.fromisoformat(quote["created_at"])
+                    .date()
+                    .strftime("%d/%m/%Y"),
+                    "staff": f"{quote["staff"]["first_name"]} {quote["staff"]["last_name"]}",
+                }
+                for quote in row_quotes
+            ]
+            return quotes
 
-        async def action(page):
-            row = await quotes.get_selected_row()
-            if row:
-                ui.notify(str(row))
-                ui.notify(f"{row['Name']}, {row['Surname']}")
-                ui.navigate.to(page)
-            else:
+        def check_selected() -> bool:
+            if not table_quotes.selected:
                 ui.notify("Select a quote before")
+            return not table_quotes.selected
 
-        quotes = ui.aggrid(
-            {
-                "columnDefs": [
-                    {"field": "id", "hide": True},
-                    {
-                        "headerName": "Name",
-                        "field": "patient.first_name",
-                        "sortable": True,
-                    },
-                    {
-                        "headerName": "Surname",
-                        "field": "patient.last_name",
-                        "sortable": True,
-                        "filter": "agTextColumnFilter",
-                        "floatingFilter": True,
-                    },
-                    {
-                        "headerName": "Date",
-                        "field": "created_at",
-                        "sortable": True,
-                        ":valueFormatter": """
-                        params => {
-                            if (!params.value) return '';
-                            const d = new Date(params.value);
-                            const day = String(d.getDate()).padStart(2, '0');
-                            const month = String(d.getMonth() + 1).padStart(2, '0');
-                            const year = d.getFullYear();
-                            return `${day}/${month}/${year}`;
-                        }
-                    """,
-                    },
-                ],
-                "rowData": quotes,
-                "rowSelection": {
-                    "mode": "singleRow",
-                    "checkboxes": False,
-                    "enableClickSelection": True,
+        def edit():
+            if check_selected:
+                ui.navigate.to(f"/home/quote_edit/{table_quotes.selected[0]["id"]}")
+
+        def delete():
+            async def on_save_callback(result: bool):
+                if result:
+                    await QuotesClient.delete_quote(
+                        quote_id=table_quotes.selected[0]["id"]
+                    )
+                    table_quotes.rows = await load_quotes()
+                    table_quotes.selected.clear()
+                    table_quotes.update()
+                    ui.notify("The quote has been", type="positive")
+                    return
+
+            if check_selected:
+                confirmation_model(
+                    title="Delete Quote?",
+                    description="Are you sure you want to permanently delete this quote and all its details?",
+                    on_save_callback=on_save_callback,
+                ).open()
+
+        table_quotes = ui.table(
+            columns=[
+                {
+                    "name": "name",
+                    "label": "Name",
+                    "field": "name",
+                    "align": "left",
+                    "sortable": True,
                 },
-            }
-        )
+                {
+                    "date": "date",
+                    "label": "Date",
+                    "field": "created_at",
+                    "align": "left",
+                    "sortable": True,
+                },
+                {
+                    "staff": "staff",
+                    "label": "Doctor",
+                    "field": "staff",
+                    "align": "left",
+                    "sortable": True,
+                },
+            ],
+            rows= await load_quotes(),
+            row_key="id",
+            selection="single",
+        ).classes("w-full")
+
+        with table_quotes.add_slot("top"):
+            search_input = (
+                ui.input(placeholder="Search patient or doctor...")
+                .classes("w-full mb-2")
+                .props("clearable dense outlined rounded")
+            )
+            search_input.add_slot("prepend", '<q-icon name="search" />')
+
+        table_quotes.bind_filter_from(search_input, "value")
 
         with ui.row():
             ui.button(
@@ -80,21 +116,28 @@ async def quotes():
                 icon="r_add",
                 on_click=lambda: ui.navigate.to("/home/quote_create"),
             )
-            ui.button("Edit", icon="r_edit", on_click=lambda: action(""))
-            ui.button("Print", icon="r_print", on_click=lambda: action(""))
-            ui.button("Download", icon="r_download", on_click=lambda: action(""))
-            ui.button("Delete", icon="r_delete", on_click=lambda: action(""))
+            ui.button("Edit",icon="r_edit",on_click=edit)
+            ui.button("Print", icon="r_print", on_click=lambda: 10)
+            ui.button("Download", icon="r_download", on_click=lambda: 10)
+            ui.button("Delete", icon="r_delete", on_click=delete)
 
 
-async def quote_create():
-    date_selected = {"date": None}
-    person_selected = {"patient_id": None}
-    staff_selected = {"staff_id": None}
-    services_selected = {}
+async def quote_detail(
+    title: str,
+    id: int | None = None,
+    date_selected: dict | None = None,
+    person_selected: dict | None = None,
+    staff_selected: dict | None = None,
+    services_selected: dict | None = None,
+):
+    date_selected = date_selected or {"date": None}
+    person_selected = person_selected or {"patient_id": None}
+    staff_selected = staff_selected or {"staff_id": None}
+    services_selected = services_selected or {}
 
     with ui.column().classes("w-full"):
 
-        ui.label("Dashboard New Quote").classes("text-3xl font-bold mb-5")
+        ui.label(title).classes("text-3xl font-bold mb-5")
 
         # Staff selection and detail
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
@@ -113,7 +156,6 @@ async def quote_create():
                     ui.select(options=names, with_input=True).bind_value(
                         staff_selected, "staff_id"
                     ).classes("w-full")
-
 
             with ui.column():
                 ui.label("Doctor Details").classes("text-lg font-bold mb-2")
@@ -260,7 +302,6 @@ async def quote_create():
                     del services_selected[row_id]
                 refresh_selected_table()
 
-            # Button handlers
             def add_selected_button():
                 if not table_services.selected:
                     ui.notify("Select a service first", type="warning")
@@ -439,32 +480,115 @@ async def quote_create():
                         on_click=open_teeth_modal,
                     )
 
-        with ui.row():
+        # Save quote
+        with ui.page_sticky(x_offset=30, y_offset=30):
+
+            async def close_quote():
+                async def on_save_callback(result: bool):
+                    if result:
+                        ui.notify("The quote has not been saved", type="info")
+                        ui.navigate.to("/home")
+                        return
+
+                confirmation_model(
+                    title="Exit Quote?",
+                    description="Are you sure you want to exit without saving? All recent changes will be lost.",
+                    on_save_callback=on_save_callback,
+                ).open()
 
             async def save_quote():
+
+                if staff_selected["staff_id"] is None:
+                    ui.notify("Incorrect staff selected", type="warning")
+                    return
+                if person_selected["patient_id"] is None:
+                    ui.notify("Incorrect patient selected", type="warning")
+                    return
 
                 if date_selected["date"] is None:
                     ui.notify("Incorrect date selected", type="warning")
                     return
 
-                if person_selected["patient_id"] is None:
-                    ui.notify("Incorrect patient selected", type="warning")
-                    return
-
-                if staff_selected["staff_id"] is None:
-                    ui.notify("Incorrect staff selected", type="warning")
-                    return
-
                 if services_selected == {}:
                     ui.notify("Errors in service selection", type="warning")
                     return
-                
-                quote = {
-                    "valid_until": date_selected["date"],
-                    "patient_id": person_selected["patient_id"],
-                    "staff_id": staff_selected["staff_id"],
-                    "items": [{"item_id": 0, "quantity": 1, "discount": 0}],
-                }
-                await QuotesClient.create_quote(quote)
 
-            ui.button("Save", icor="r_save", on_click=save_quote)
+                async def on_save_callback(result: bool):
+                    if not result:
+                        ui.notify("The quote has not been saved", type="info")
+                        return
+
+                    items = [
+                        {
+                            "item_id": service["id"],
+                            "quantity": service["quantity"],
+                            "discount": service["discount"],
+                            "teeth": service["teeth"],
+                        }
+                        for service in services_selected.values()
+                    ]
+
+                    quote = {
+                        "valid_until": date_selected["date"],
+                        "patient_id": person_selected["patient_id"],
+                        "staff_id": staff_selected["staff_id"],
+                        "items": items,
+                    }
+
+                    if id:
+                        res = await QuotesClient.update_quote(id, quote)
+                    else:
+                        res = await QuotesClient.create_quote(quote)
+                        ui.navigate.to(f"/home/quote_edit/{res["id"]}")
+
+                    if res:
+                        ui.notify("Quote saved successfully", type="positive")
+                    else:
+                        ui.notify("Error while saving the quote", type="negative")
+
+                confirmation_model(
+                    title="Save Quote?",
+                    description="Are you sure you want to save this quote and its selected services?",
+                    on_save_callback=on_save_callback,
+                ).open()
+
+            with ui.row():
+                ui.button("Close", icon="r_close", on_click=close_quote)
+                ui.button("Save", icon="r_save", on_click=save_quote)
+
+
+async def quote_create():
+    try:
+        await quote_detail(title="New Quote")
+    except Exception as e:
+        ui.label(f"Crash detected: {str(e)}").classes("text-red text-xl font-bold")
+        print(traceback.format_exc(), flush=True)
+
+
+async def quote_edit(id: int):
+    try:
+        quote = await QuotesClient.get_quote_with_id(id)
+
+        services_selected = {
+            item["item_id"]: {
+                "id": item["item_id"],
+                "name": item["item"]["name"],
+                "quantity": item["quantity"],
+                "discount": item["discount"],
+                "teeth": item["teeth"],
+                "is_specific": item["item"]["is_specific"],
+            }
+            for item in quote["quote_items"]
+        }
+
+        await quote_detail(
+            title="Edit Quote",
+            id=id,
+            date_selected={"date": quote["valid_until"]},
+            person_selected={"patient_id": quote["patient"]["id"]},
+            staff_selected={"staff_id": quote["staff"]["id"]},
+            services_selected=services_selected,
+        )
+    except Exception as e:
+        ui.label(f"Crash detected: {str(e)}").classes("text-red text-xl font-bold")
+        print(traceback.format_exc(), flush=True)

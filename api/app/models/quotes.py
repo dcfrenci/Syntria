@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, func, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -37,6 +37,7 @@ class QuoteItem(Base):
     quantity: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     discount: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=0, nullable=False)
+    teeth: Mapped[list[int] | None] = mapped_column(JSON, nullable=True)
 
     quote: Mapped["Quote"] = relationship("Quote", back_populates="quote_items")
     item: Mapped["Item"] = relationship("Item", lazy="selectin")

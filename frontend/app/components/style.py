@@ -32,6 +32,15 @@ class Style:
     def table() -> str:
         pass
     
+    def row_start() -> str:
+        pass
+    
+    def row_end() -> str:
+        return "w-full justify-end mt-4 gap-2"
+    
+    def dialog() -> str:
+        return ""
+    
     def card() -> str:
         pass
     
@@ -43,5 +52,6 @@ class Style:
     
     def input() -> str:
         pass
+    
     
     

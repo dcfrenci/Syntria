@@ -71,6 +71,7 @@ async def create_quote(
             quantity=req_item.quantity,
             unit_price=unit_price,
             discount=req_item.discount,
+            teeth=req_item.teeth,
         )
         db.add(quote_item)
 
@@ -145,3 +146,17 @@ async def update_quote(
     await db.flush()
     await db.refresh(quote)
     return quote
+
+
+@router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_quote(
+    quote_id: int, 
+    db: AsyncSession = Depends(get_db)
+):
+    quote = await db.get(Quote, quote_id)
+    if not quote:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found.")
+    
+    await db.delete(quote)
+    await db.commit()
+    return None

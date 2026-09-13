@@ -52,6 +52,8 @@ def auth_route():
     login_page()
 
 @ui.page('/home')
+@ui.page('/home/quote_create')
+@ui.page('/home/quote_edit/{id}')
 def home_route():
     with frame(page_title='Home', active_route='/home'):
         home_page()
