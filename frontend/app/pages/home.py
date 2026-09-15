@@ -8,7 +8,7 @@ from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
 from components.teeth_selection import teeth_selection
-from components.modals import confirmation_model
+from components.modals import confirmation_modal
 
 
 def home_page():
@@ -45,11 +45,12 @@ async def quotes():
 
         def check_selected() -> bool:
             if not table_quotes.selected:
-                ui.notify("Select a quote before")
-            return not table_quotes.selected
+                ui.notify("Select a quote before", type="warning")
+                return False
+            return True
 
         def edit():
-            if check_selected:
+            if check_selected():
                 ui.navigate.to(f"/home/quote_edit/{table_quotes.selected[0]["id"]}")
 
         def delete():
@@ -61,11 +62,10 @@ async def quotes():
                     table_quotes.rows = await load_quotes()
                     table_quotes.selected.clear()
                     table_quotes.update()
-                    ui.notify("The quote has been", type="positive")
-                    return
+                    ui.notify("The quote has been deleted", type="positive")
 
-            if check_selected:
-                confirmation_model(
+            if check_selected():
+                confirmation_modal(
                     title="Delete Quote?",
                     description="Are you sure you want to permanently delete this quote and all its details?",
                     on_save_callback=on_save_callback,
@@ -490,7 +490,7 @@ async def quote_detail(
                         ui.navigate.to("/home")
                         return
 
-                confirmation_model(
+                confirmation_modal(
                     title="Exit Quote?",
                     description="Are you sure you want to exit without saving? All recent changes will be lost.",
                     on_save_callback=on_save_callback,
@@ -546,7 +546,7 @@ async def quote_detail(
                     else:
                         ui.notify("Error while saving the quote", type="negative")
 
-                confirmation_model(
+                confirmation_modal(
                     title="Save Quote?",
                     description="Are you sure you want to save this quote and its selected services?",
                     on_save_callback=on_save_callback,

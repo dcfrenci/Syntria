@@ -16,6 +16,8 @@ async def create_item(
     payload: ItemCreate,
     db: AsyncSession = Depends(get_db),
 ):
+    cat_exists = None
+    
     # Validate category exists if provided
     if payload.category_id is not None:
         cat_exists = await db.get(Category, payload.category_id)
@@ -36,7 +38,7 @@ async def create_item(
     new_item = Item(**payload.model_dump())
     db.add(new_item)
     await db.flush()
-    await db.refresh(new_item, ["category"])
+    await db.refresh(new_item)
     return new_item
 
 
@@ -103,5 +105,45 @@ async def update_item(
         setattr(item, field, value)
 
     await db.flush()
-    await db.refresh(item, ["category"])
+    await db.refresh(item)
     return item
+
+# 4. READ ONE
+@router.get("/{item_id}", response_model=ItemResponse, status_code=status.HTTP_200_OK)
+async def get_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    item = (
+        await db.execute(
+            select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
+        )
+    ).scalar_one_or_none()
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"Item with id {item_id} not found."
+        )
+
+    return item
+
+
+# 5. DELETE
+@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_item(
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    item = await db.get(Item, item_id)
+    
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail=f"Item with id {item_id} not found."
+        )
+
+    await db.delete(item)
+    await db.flush()
+    
+    return None

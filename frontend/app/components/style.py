@@ -25,12 +25,12 @@ class Style:
         pass
     
     def p() -> str:
-        return "text-base font-normal"
+        return "w-full text-base font-normal"
     
     
     # Components
     def table() -> str:
-        pass
+        return "w-[calc(100%-2rem)] m-4 shadow-lg rounded-xl"
     
     def row_start() -> str:
         pass
@@ -39,7 +39,7 @@ class Style:
         return "w-full justify-end mt-4 gap-2"
     
     def dialog() -> str:
-        return ""
+        return "w-1/2"
     
     def card() -> str:
         pass
