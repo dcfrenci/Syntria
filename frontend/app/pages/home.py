@@ -9,11 +9,12 @@ from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
 from components.teeth_selection import teeth_selection
 from components.modals import confirmation_modal
+from components.style import Style
 
 
 def home_page():
     """Renders the Home dashboard view."""
-    with ui.column().classes("p-8 w-full"):
+    with ui.column().classes("w-full"):
 
         ui.sub_pages(
             {
@@ -25,8 +26,8 @@ def home_page():
 
 
 async def quotes():
-    with ui.column().classes("w-full h-screen"):
-        ui.label("Quote").classes("text-3xl font-bold mb-5")
+    with ui.column().classes("w-full"):
+        ui.label("Quote").classes(Style.title())
 
         async def load_quotes():
             row_quotes = await QuotesClient.get_quotes()
@@ -95,28 +96,28 @@ async def quotes():
                     "sortable": True,
                 },
             ],
-            rows= await load_quotes(),
+            rows=await load_quotes(),
             row_key="id",
             selection="single",
-        ).classes("w-full")
+        ).classes(Style.table())
 
         with table_quotes.add_slot("top"):
             search_input = (
                 ui.input(placeholder="Search patient or doctor...")
-                .classes("w-full mb-2")
-                .props("clearable dense outlined rounded")
+                .classes("w-full text-base")
+                .props("clearable outlined rounded")
             )
             search_input.add_slot("prepend", '<q-icon name="search" />')
 
         table_quotes.bind_filter_from(search_input, "value")
 
-        with ui.row():
+        with ui.row().classes(Style.row_end()):
             ui.button(
                 "New",
                 icon="r_add",
                 on_click=lambda: ui.navigate.to("/home/quote_create"),
             )
-            ui.button("Edit",icon="r_edit",on_click=edit)
+            ui.button("Edit", icon="r_edit", on_click=edit)
             ui.button("Print", icon="r_print", on_click=lambda: 10)
             ui.button("Download", icon="r_download", on_click=lambda: 10)
             ui.button("Delete", icon="r_delete", on_click=delete)
@@ -137,7 +138,7 @@ async def quote_detail(
 
     with ui.column().classes("w-full"):
 
-        ui.label(title).classes("text-3xl font-bold mb-5")
+        ui.label(title).classes(Style.title())
 
         # Staff selection and detail
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
@@ -146,7 +147,7 @@ async def quote_detail(
 
             with ui.column():
 
-                ui.label("Select Doctor").classes("text-lg font-bold mb-2")
+                ui.label("Select Doctor").classes(Style.h2())
 
                 with ui.card().classes("w-full"):
                     names = {
@@ -155,13 +156,13 @@ async def quote_detail(
                     }
                     ui.select(options=names, with_input=True).bind_value(
                         staff_selected, "staff_id"
-                    ).classes("w-full")
+                    ).classes(Style.p())
 
             with ui.column():
-                ui.label("Doctor Details").classes("text-lg font-bold mb-2")
+                ui.label("Doctor Details").classes(Style.h2())
                 with ui.card().classes("w-full h-full flex flex-center"):
                     with ui.row().classes("pl-4"):
-                        ui.label("Name: ")
+                        ui.label("Name: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             staff_selected,
                             "staff_id",
@@ -170,9 +171,9 @@ async def quote_detail(
                                 if id in persons
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
                     with ui.row().classes("pl-4"):
-                        ui.label("Email: ")
+                        ui.label("Email: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             staff_selected,
                             "staff_id",
@@ -181,7 +182,7 @@ async def quote_detail(
                                 if id in persons
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
 
         # Patient selection and details
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
@@ -190,7 +191,7 @@ async def quote_detail(
 
             with ui.column():
 
-                ui.label("Select Patient").classes("text-lg font-bold mb-2")
+                ui.label("Select Patient").classes(Style.h2())
 
                 with ui.card().classes("w-full"):
                     names = {
@@ -199,18 +200,18 @@ async def quote_detail(
                     }
                     ui.select(options=names, with_input=True).bind_value(
                         person_selected, "patient_id"
-                    ).classes("w-full")
+                    ).classes(Style.p())
 
                 with ui.card().classes("w-full"):
                     ui.date_input(placeholder="Valid period").classes(
-                        "w-full"
+                        Style.p()
                     ).bind_value(date_selected, "date")
 
             with ui.column():
-                ui.label("Patient Details").classes("text-lg font-bold mb-2")
+                ui.label("Patient Details").classes(Style.h2())
                 with ui.card().classes("w-full h-full flex flex-center"):
                     with ui.row().classes("pl-4"):
-                        ui.label("Name: ")
+                        ui.label("Name: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             person_selected,
                             "patient_id",
@@ -219,20 +220,22 @@ async def quote_detail(
                                 if id in persons
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
                     with ui.row().classes("pl-4"):
-                        ui.label("Birth date: ")
+                        ui.label("Birth date: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             person_selected,
                             "patient_id",
                             backward=lambda id: (
-                                str(persons[id].get("birth_date", ""))
-                                if id in persons
+                                datetime.strptime(
+                                    persons[id].get("birth_date"), "%Y-%m-%d"
+                                ).strftime("%d/%m/%Y")
+                                if id in persons and persons[id].get("birth_date")
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
                     with ui.row().classes("pl-4"):
-                        ui.label("Email: ")
+                        ui.label("Email: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             person_selected,
                             "patient_id",
@@ -241,9 +244,9 @@ async def quote_detail(
                                 if id in persons
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
                     with ui.row().classes("pl-4"):
-                        ui.label("Phone: ")
+                        ui.label("Phone: ").classes(Style.p_fit())
                         ui.label().bind_text_from(
                             person_selected,
                             "patient_id",
@@ -252,7 +255,7 @@ async def quote_detail(
                                 if id in persons
                                 else ""
                             ),
-                        )
+                        ).classes(Style.p_fit())
 
         # Service selection and teeth selection
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
@@ -379,11 +382,11 @@ async def quote_detail(
                     )
                 return formatted
 
-            table_css = "w-full h-[420px] rounded-xl"
+            table_css = "w-[calc(100%-2rem)] h-[420px] m-2 rounded-xl shadow-lg"
 
             # --- Left Column: Available Services ---
             with ui.column().classes("w-full"):
-                ui.label("Select Services").classes("text-lg font-bold")
+                ui.label("Select Services").classes(Style.h2())
 
                 table_services = (
                     ui.table(
@@ -414,8 +417,8 @@ async def quote_detail(
                 with table_services.add_slot("top"):
                     search_input = (
                         ui.input(placeholder="Search service or category...")
-                        .classes("w-full mb-2")
-                        .props("clearable dense outlined rounded")
+                        .classes("w-full text-base")
+                        .props("clearable outlined rounded")
                     )
                     search_input.add_slot("prepend", '<q-icon name="search" />')
 
@@ -429,7 +432,7 @@ async def quote_detail(
 
             # --- Right Column: Selected Services ---
             with ui.column().classes("w-full"):
-                ui.label("Selected Services").classes("text-lg font-bold")
+                ui.label("Selected Services").classes(Style.h2())
 
                 table_selected = (
                     ui.table(

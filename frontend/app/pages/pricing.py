@@ -123,7 +123,7 @@ async def pricing_page():
                 await refresh_items()
                 ui.notify("The category has been deleted", type="positive")
 
-        ui.label("Pricing").classes(Style.h1())
+        ui.label("Pricing").classes(Style.title())
 
         ui.label("Services").classes(Style.h2())
 

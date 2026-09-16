@@ -43,7 +43,7 @@ def frame(page_title: str, active_route: str):
     create_sidebar(active_route=active_route)
     
     # Create the main content container
-    with ui.column().classes('w-full max-w-7xl mx-auto h-screen overflow-y-auto'): 
+    with ui.column().classes('w-full max-w-7xl mx-auto overflow-y-auto'): 
         yield
 
 # --- Routes Registration ---

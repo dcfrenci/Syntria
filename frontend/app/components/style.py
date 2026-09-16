@@ -7,7 +7,7 @@ class Style:
     
     # Text Definition
     def title() -> str:
-        return "text-4xl font-extrabold mb-5"
+        return "text-4xl font-bold my-5"
     
     def h1() -> str:
         return "text-2xl font-bold mb-4"
@@ -26,6 +26,9 @@ class Style:
     
     def p() -> str:
         return "w-full text-base font-normal"
+    
+    def p_fit() -> str:
+        return "w-fit text-base font-normal"
     
     
     # Components
