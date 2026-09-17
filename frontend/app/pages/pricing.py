@@ -3,7 +3,6 @@ from api_client.services import ServicesClient
 from components.modals import service_modal, category_modal, confirmation_modal
 from components.style import Style
 
-
 async def pricing_page():
     """Renders the Pricing & Services management view."""
 
