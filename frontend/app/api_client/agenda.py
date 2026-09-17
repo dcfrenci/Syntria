@@ -2,9 +2,9 @@ from api_client.base import APIClient
 
 class AgendaClient:
     @staticmethod
-    async def get_reservations(token: str | None = None):
+    async def get_reservations_doctor_week(doctor_id: int, week):
         """Fetches all appointments/reservations."""
-        result = await APIClient.get("/reservations/", token=token)
+        result = await APIClient.get("/reservations/")
         return result.get("reservations", []) if result else []
 
     @staticmethod
