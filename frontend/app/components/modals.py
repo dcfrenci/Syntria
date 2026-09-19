@@ -1,6 +1,10 @@
 from nicegui import ui
+from datetime import datetime, timezone, timedelta
+
 from components.style import Style
 
+from api_client.services import ServicesClient
+from api_client.persons import PersonsClient
 from api_client.services import ServicesClient
 
 
@@ -122,6 +126,72 @@ async def category_modal(title: str, on_save_callback, category_id: int | None =
                 ],
             )
             
+    return dialog
+
+
+async def reservation_modal(title: str, h_start: int, h_end: int, doctor_id: int, on_save_callback, reservation_id: int | None = None):
+    """Generate a dialog popup for reservation creation/editing."""
+    
+    raw_persons = await PersonsClient.get_persons()
+    raw_services = await ServicesClient.get_items()
+    raw_doctor = next((p for p in raw_persons if p["id"] == doctor_id), None)
+
+    with ui.dialog() as dialog, ui.card().classes("w-full max-w-3xl p-6"):
+        ui.label(title).classes(Style.h1())
+        
+        doctor = ui.select(label="Doctor", options={p["id"]: f"{p["first_name"]} {p["last_name"]}" for p in raw_persons})
+        patient = ui.select(label="Patient", options={p["id"]: f"{p["first_name"]} {p["last_name"]}" for p in raw_persons})
+        date = ui.date()
+        # time = ui.select(label="Time", options=[f"{t}:00" if t % 1 == 0 else f"{t - 0.5}:30" for t in range(h_start, h_end + 0.5, 0.5)])
+        time = ui.select(label="Time", options=[(datetime.strptime(f"{h_start}:00", "%H:%M") + timedelta(minutes=30 * i)).strftime("%H:%M") for i in range(int((h_end - h_start) * 2) + 1)])
+        service = ui.select(label="Service", options={s["id"]: s["name"] for s in raw_services})
+        duration = ui.number("Duration minutes")
+        description = ui.input("Description")
+        
+        doctor.value = raw_doctor["id"]
+        
+        if reservation_id:
+            pass
+        
+        async def handle_save(value: bool):
+            if value:
+                if doctor.value == None or patient.value == None or date.value == None or time.value == None or service.value == None or duration.value == None or description.value == None:
+                    ui.notify(message="Fill out all the details before saving", type="warning")
+                    return
+                
+                reservation = {
+                    "reservation_date": datetime.strptime(f"{date.value} {time.value}", "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                    "duration_minutes": int(duration.value),
+                    "description": description.value,
+                    "patient_id": patient.value,
+                    "staff_ids": [doctor.value]
+                }
+                
+                print(reservation, flush=True)
+                await on_save_callback(reservation, reservation_id)
+            else:
+                ui.notify(message="The reservation was not saved", type="info")
+            dialog.close()
+        
+        with ui.row().classes(Style.row_end()):
+            ui.button(
+                "Cancel",
+                on_click=lambda: [
+                    dialog.close(),
+                    ui.notify(message="The reservation was not saved", type="info"),
+                ],
+            ).props("outline")
+            ui.button(
+                "Save",
+                on_click=lambda: [
+                    confirmation_modal(
+                        title="Save Reservation?",
+                        description="Confirm you want to save this reservation to your agenda.",
+                        on_save_callback=handle_save,
+                    ).open()
+                ],
+            )
+        
     return dialog
 
 

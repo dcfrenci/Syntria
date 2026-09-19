@@ -8,12 +8,12 @@ class APIClient:
     """Centralized HTTP client for communicating with the FastAPI backend."""
     
     @staticmethod
-    async def get(endpoint: str) -> dict | list | None:
+    async def get(endpoint: str, params: dict | None = None) -> dict | list | None:
         token = app.storage.user['token'] if app.storage.user.get('authenticated', False) else None
         headers = {"Authorization": f"Bearer {token}"} if token else {}
         async with httpx.AsyncClient() as client:
             try:
-                response = await client.get(f"{BASE_URL}{endpoint}", headers=headers)
+                response = await client.get(f"{BASE_URL}{endpoint}", headers=headers, params=params)
                 response.raise_for_status()
                 return response.json()
             except httpx.HTTPError as e:

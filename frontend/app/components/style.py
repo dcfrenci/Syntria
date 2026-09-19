@@ -38,6 +38,9 @@ class Style:
     def row_start() -> str:
         pass
     
+    def row_center() -> str:
+        return "w-full justify-center mt-4 gap-2"
+    
     def row_end() -> str:
         return "w-full justify-end mt-4 gap-2"
     

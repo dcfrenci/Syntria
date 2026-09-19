@@ -2,10 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from datetime import date, timedelta
+from typing import Optional
 
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models import Role, User, Person
+from app.models import Role, User, Person, Reservation
 from app.routers.auth import get_current_user
 from app.schemas.roles import RoleCreate, RoleResponse
 from app.schemas.users import (
@@ -14,6 +16,7 @@ from app.schemas.users import (
     UserResponse,
     UserUpdate,
 )
+from app.schemas.reservations import ReservationListResponse
 
 router = APIRouter(prefix="/users", tags=["Users & Staff"])
 
@@ -263,3 +266,44 @@ async def delete_user(
 
     await db.delete(user)
     return None
+
+
+@router.get("/{user_id}/reservations", response_model=ReservationListResponse)
+async def get_user_reservations(  # Changed to async def
+    user_id: int,
+    start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieve reservations assigned to a specific staff member/doctor."""
+    
+    # 1. Verify user exists using async syntax
+    user_stmt = select(User).where(User.id == user_id)
+    result = await db.execute(user_stmt)
+    user = result.scalars().first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 2. Determine date range
+    if not end_date:
+        active_start = start_date - timedelta(days=start_date.weekday())
+        active_end = active_start + timedelta(days=6)
+    else:
+        active_start = start_date
+        active_end = end_date
+
+    # 3. Build and execute the async query
+    query = select(Reservation).where(Reservation.staff.any(id=user_id))
+    
+    # Filter >= start at midnight
+    query = query.where(Reservation.reservation_date >= active_start)
+    
+    # Filter < the day AFTER the end date
+    query = query.where(Reservation.reservation_date < active_end + timedelta(days=1))
+
+    # Execute and fetch all results
+    result = await db.execute(query)
+    reservations = result.scalars().all()
+
+    return {"total": len(reservations), "reservations": reservations}

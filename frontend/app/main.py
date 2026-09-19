@@ -37,7 +37,7 @@ def frame(page_title: str, active_route: str):
     ui.page_title(page_title)
     # Background color of the whole app
     ui.query('body').classes('bg-white') 
-    
+    ui.query('.nicegui-content').classes('pb-32')
     
     # Render the sidebar with the correct active hover state
     create_sidebar(active_route=active_route)
