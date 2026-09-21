@@ -81,6 +81,20 @@ async def create_reservation(
     await db.refresh(reservation)
     return reservation
 
+@router.get("/{reservation_id}", response_model=ReservationResponse, status_code=status.HTTP_200_OK)
+async def get_reservation(
+    reservation_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    reservation = await db.get(Reservation, reservation_id)
+    
+    if not reservation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Reservation not found."
+        )
+
+    return reservation
 
 @router.patch("/{reservation_id}", response_model=ReservationResponse, status_code=status.HTTP_200_OK)
 async def update_reservation(

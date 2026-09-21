@@ -1,12 +1,9 @@
 from nicegui import ui
+import datetime
 from api_client.agenda import AgendaClient
 from api_client.persons import PersonsClient
 from components.style import Style
 from components.modals import reservation_modal
-
-import datetime
-import asyncio
-from typing import List, Dict, Any
 
 
 class Agenda:
@@ -60,6 +57,44 @@ def split_by_day(reservations: list[dict]):
             split[res_date] = []
         split[res_date].append(res)
     return split
+
+
+async def save_reservation(reservation: dict, id: int | None = None):
+    if id is None:
+        await AgendaClient.create_reservation(data=reservation)
+    else:
+        await AgendaClient.update_reservation(reservation_id=id, data=reservation)
+    calendar.refresh()
+
+
+async def delete_reservation(reservation_id: int):
+    await AgendaClient.delete_reservation(reservation_id=reservation_id)
+    calendar.refresh()
+
+
+async def new_reservation():
+    modal = await reservation_modal(
+        title="New Reservation",
+        h_start=START_HOUR,
+        h_end=END_HOUR,
+        doctor_id=agenda.doctor_id,
+        on_save_callback=save_reservation,
+        on_delete_callback=delete_reservation
+    )
+    modal.open()
+
+
+async def edit_reservation(reservation_id: int):
+    modal = await reservation_modal(
+        title="Edit Reservation",
+        h_start=START_HOUR,
+        h_end=END_HOUR,
+        doctor_id=agenda.doctor_id,
+        on_save_callback=save_reservation,
+        on_delete_callback=delete_reservation,
+        reservation_id=reservation_id,
+    )
+    modal.open()
 
 
 @ui.refreshable
@@ -159,7 +194,9 @@ async def calendar():
                                 "col-start-1 w-[95%] p-1 shadow-lg cursor-pointer rounded-lg justify-center bg-gray-300"
                             ).style(
                                 f"grid-row: {start_row} / span {row_span}; top: {h_hours / 2}px;"
-                            ):
+                            ) as card:
+                                card.on("click", lambda: edit_reservation(event["id"]))
+
                                 ui.label(
                                     f"{dt.strftime('%H:%M')} - {end_time.strftime('%H:%M')}"
                                 ).classes("text-xs font-semibold text-center w-full")
@@ -167,6 +204,36 @@ async def calendar():
                                     ui.label(event["patient"]["last_name"]).classes(
                                         "text-xs text-center w-full truncate"
                                     )
+
+                                with ui.tooltip().classes(
+                                    "w-50 bg-transparent p-0 shadow-none"
+                                ):
+                                    with ui.card().classes(
+                                        "w-[90%] bg-white border border-gray-200 shadow-xl p-3 rounded-xl"
+                                    ):
+                                        with ui.column().classes("gap-0"):
+                                            ui.label("Reservation details").classes(
+                                                "mb-1 font-bold text-center text-sm text-gray-800"
+                                            )
+                                            sty_label = "ml-1 max-w-40 truncate text-sm text-gray-600"
+                                            ui.label(
+                                                f"- Time: {dt.strftime('%H:%M')} - {end_time.strftime('%H:%M')}"
+                                            ).classes(sty_label)
+                                            ui.label(
+                                                f"- Name: {event["patient"]["first_name"]} {event["patient"]["last_name"]}"
+                                            ).classes(sty_label)
+                                            ui.label(
+                                                f"- Description: {event["description"]}"
+                                            ).classes(sty_label)
+                                            ui.label(
+                                                f"- Reminder: {event["patient"]["reminder_preference"]["name"]}"
+                                            ).classes(sty_label)
+                                            ui.label(
+                                                f"- Phone: {event["patient"]["phone_number"]}"
+                                            ).classes(sty_label)
+                                            ui.label("Cliclk to edit").classes(
+                                                "text-xs text-gray-500 italic mt-2 text-center w-full"
+                                            )
 
             # Right time axis
             with ui.column().classes("w-15 h-full gap-0"):
@@ -202,40 +269,14 @@ async def agenda_page():
         def update_agenda():
             agenda.set_doctor(doctor_id=doctor.value)
 
-        doctor = (
-            ui.select(label="Select doctor", options=doctors, on_change=update_agenda)
-            .classes(f"max-w-1/3 {Style.p()}")
-        )
+        doctor = ui.select(
+            label="Select doctor", options=doctors, on_change=update_agenda
+        ).classes(f"max-w-1/3 {Style.p()}")
 
     await calendar()
 
     # Floating buttons
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
 
-        async def save_reservation(reservation: dict, id: int | None = None):
-            if id is None:
-                await AgendaClient.create_reservation(data=reservation)
-            else:
-                await AgendaClient.update_reservation(
-                    reservation_id=id, data=reservation
-                )
-            calendar.refresh()
-
-        async def new_reservation():
-            if not agenda.doctor_id:
-                ui.notify(message="Select a doctor before", type="info")
-            modal = await reservation_modal(
-                title="New Reservation",
-                h_start=START_HOUR,
-                h_end=END_HOUR,
-                doctor_id=agenda.doctor_id,
-                on_save_callback=save_reservation,
-            )
-            modal.open()
-
-        ui.button(icon="notifications_none").props(
-            'fab color="indigo-3" text-color="black"'
-        ).classes("shadow-lg w-14 h-14")
-        ui.button(icon="add", on_click=new_reservation).props(
-            'fab color="indigo-3" text-color="black"'
-        ).classes("shadow-lg w-14 h-14 text-2xl")
+        ui.button(icon="notifications_none")
+        ui.button(icon="add", on_click=new_reservation)
