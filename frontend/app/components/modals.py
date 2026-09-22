@@ -8,7 +8,7 @@ from api_client.persons import PersonsClient
 from api_client.services import ServicesClient
 from api_client.agenda import AgendaClient
 
-from components.calendar import time_column, day_column
+from components.calendar import Calendar
 
 
 async def service_modal(title: str, on_save_callback, item_id: int | None = None):
@@ -155,56 +155,33 @@ async def reservation_modal(
     reservation_id: int | None = None,
 ):
     """Generate a dialog popup for reservation creation/editing."""
+    my_calendar = Calendar(
+        start_hour=h_start, end_hour=h_end, h_header=40, h_row=20, mt_row=1
+    )
 
-    @ui.refreshable
-    async def calendar():
+    async def get_calendar() -> tuple:
+        target_date = (
+            datetime.strptime(date_sel.value, "%Y-%m-%d").date()
+            if date_sel.value != ""
+            else date.today()
+        )
         if doctor.value is None or date_sel.value == "":
-            ui.label("Please select a doctor and a date to view their agenda.").classes(
-                "text-gray-500 italic mt-10 text-center w-full"
-            )
-            return
-
+            return target_date, []
         week_reservation = await AgendaClient.get_reservations_doctor_week(
             doctor_id=doctor.value, start_date=date_sel.value
         )
-        target_date = datetime.strptime(date_sel.value, "%Y-%m-%d").date()
-        day_reservations = [
-            r
-            for r in week_reservation
-            if datetime.fromisoformat(r["reservation_date"]).date() == target_date
-        ]
-        h_header = 40
-        h_row = 20
-        mt_row = 1
-        time_column(
-            width=40,
-            start_hour=h_start,
-            end_hour=h_end,
-            h_header=h_header,
-            h_row=h_row,
-            mt_row=mt_row,
-            align="right",
+        return target_date, week_reservation
+
+    async def reload():
+        target_date, week_reservation = await get_calendar()
+        my_calendar.update_calendar(
+            new_dates=[target_date], new_reservations=week_reservation
         )
-        day_column(
-            day=target_date,
-            reservations=day_reservations,
-            width=200,
-            start_hour=h_start,
-            end_hour=h_end,
-            h_header=h_header,
-            h_row=h_row,
-            mt_row=mt_row,
-            single=True,
-        )
-        time_column(
-            width=40,
-            start_hour=h_start,
-            end_hour=h_end,
-            h_header=h_header,
-            h_row=h_row,
-            mt_row=mt_row,
-            align="left",
-        )
+
+    def new_event():
+        if time.value is None or duration.value is None:
+            return
+        my_calendar.update_new_event(time=time.value, duration=duration.value)
 
     raw_persons = await PersonsClient.get_persons()
     raw_services = await ServicesClient.get_items()
@@ -221,7 +198,7 @@ async def reservation_modal(
                         p["id"]: f"{p["first_name"]} {p["last_name"]}"
                         for p in raw_persons
                     },
-                    on_change=calendar.refresh,
+                    on_change=reload,
                 ).classes(Style.p())
                 patient = ui.select(
                     label="Patient",
@@ -230,9 +207,7 @@ async def reservation_modal(
                         for p in raw_persons
                     },
                 ).classes(Style.p())
-                date_sel = ui.date_input("Date", on_change=calendar.refresh).classes(
-                    Style.p()
-                )
+                date_sel = ui.date_input("Date", on_change=reload).classes(Style.p())
                 time = ui.select(
                     label="Time",
                     options=[
@@ -242,16 +217,27 @@ async def reservation_modal(
                         ).strftime("%H:%M")
                         for i in range(int((h_end - h_start) * 2) + 1)
                     ],
+                    on_change=new_event,
                 ).classes(Style.p())
                 service = ui.select(
                     label="Service", options={s["id"]: s["name"] for s in raw_services}
                 ).classes(Style.p())
-                duration = ui.number("Duration minutes").classes(Style.p())
+                duration = ui.number("Duration minutes", on_change=new_event).classes(
+                    Style.p()
+                )
                 description = ui.input("Description").classes(Style.p())
 
             # Calendar view
-            with ui.row().classes("w-[60%] gap-0 justify-center"):
-                await calendar()
+            with ui.row().classes("w-[60%] justify-center"):
+
+                target_date, week_reservation = await get_calendar()
+
+                my_calendar.build(
+                    dates=[target_date],
+                    reservations=week_reservation,
+                    time_width=50,
+                    day_width=200,
+                )
 
         if doctor_id:
             raw_doctor = next((p for p in raw_persons if p["id"] == doctor_id), None)
@@ -317,16 +303,17 @@ async def reservation_modal(
             dialog.close()
 
         with ui.row().classes(Style.row_end()):
-            ui.button(
-                "Delete",
-                on_click=lambda: [
-                    confirmation_modal(
-                        title="Delete Reservation?",
-                        description="Confirm you want to delete this reservation from the agenda.",
-                        on_save_callback=handle_delete,
-                    ).open()
-                ],
-            )
+            if reservation_id:
+                ui.button(
+                    "Delete",
+                    on_click=lambda: [
+                        confirmation_modal(
+                            title="Delete Reservation?",
+                            description="Confirm you want to delete this reservation from the agenda.",
+                            on_save_callback=handle_delete,
+                        ).open()
+                    ],
+                )
             ui.button(
                 "Cancel",
                 on_click=lambda: [
