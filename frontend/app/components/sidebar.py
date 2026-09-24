@@ -26,5 +26,5 @@ def create_sidebar(active_route: str = '/'):
             menu_item('r_home', 'Home', '/home')
             menu_item('r_menu_book', 'Agenda', '/agenda')
             menu_item('r_attach_money', 'Pricing', '/pricing')
-            menu_item('r_edit', 'Customize quote', '/quote')
+            menu_item('r_edit', 'Customize quote', '/preset')
             menu_item('r_settings', 'Setting', '/settings')

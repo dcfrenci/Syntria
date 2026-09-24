@@ -6,6 +6,7 @@ from app.models.users import User
 from app.models.roles import Role
 from app.models.reservations import Reservation
 from app.models.quotes import Quote, QuoteItem
+from app.models.presets import Preset
 
 __all__ = [
     "Category",
@@ -17,4 +18,5 @@ __all__ = [
     "Reservation",
     "Quote",
     "QuoteItem",
+    "Preset",
 ]

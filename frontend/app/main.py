@@ -13,7 +13,7 @@ from pages.login import login_page
 from pages.home import home_page
 from pages.pricing import pricing_page
 from pages.agenda import agenda_page
-from pages.quote import quote_page
+from pages.preset import preset_page
 from pages.reminders import reminders_page
 from pages.settings import settings_page
 
@@ -68,10 +68,12 @@ async def pricing_route():
     with frame(page_title='Pricing', active_route='/pricing'):
         await pricing_page()
 
-@ui.page('/quote')
+@ui.page('/preset')
+@ui.page('/preset/create')
+@ui.page('/preset/edit/{id}')
 def quote_route():
-    with frame(page_title='Quotes', active_route='/quote'):
-        quote_page()
+    with frame(page_title='Quotes', active_route='/preset'):
+        preset_page()
 
 @ui.page('/reminders')
 def reminders_route():
