@@ -6,11 +6,27 @@ from datetime import datetime
 from nicegui import ui, events
 from components.style import Style
 from components.modals import confirmation_modal
+from components.quote_preview_modal import QuotePreviewModal
 from api_client.presets import PresetsClient
 
 # Standard Document Constraints
 A4_WIDTH = 794
 A4_HEIGHT = 1123
+
+# Mock Quote Data for Preview Generation with corrected total amount
+FAKE_QUOTE = {
+  "valid_until": "2026-09-25",  "id": 0,  "status": "Draft",  "total_amount": "1970.00",  
+  "patient": { "first_name": "Mario", "last_name": "Rossi" },  
+  "quote_items": [    
+    { "quantity": 1, "item": { "name": "Dental Cleaning", "price": "80", "is_specific": False }, "teeth": [] },
+    { "quantity": 2, "item": { "name": "Cavity Filling", "price": "120", "is_specific": True }, "teeth": [11, 12] },
+    { "quantity": 1, "item": { "name": "Root Canal", "price": "500", "is_specific": True }, "teeth": [24] },
+    { "quantity": 1, "item": { "name": "Crown Installation", "price": "850", "is_specific": True }, "teeth": [31] },
+    { "quantity": 4, "item": { "name": "X-Ray", "price": "25", "is_specific": False }, "teeth": [] },
+    { "quantity": 1, "item": { "name": "Teeth Whitening", "price": "200", "is_specific": False }, "teeth": [] }
+  ],  
+  "created_at": "2026-09-25T15:23:36.631Z"
+}
 
 
 class QuoteBuilderState:
@@ -25,8 +41,8 @@ class QuoteBuilderState:
         self.selected_id = None
         self.editing_preset_id = None
         self.element_to_delete = None
-        self.preset_name = "New Preset"
-        self.scale = 0.75  # Manage zoom state
+        self.preset_name = ""
+        self.scale = 0.75  
         self.margins = {"top": 96.0, "right": 96.0, "bottom": 96.0, "left": 96.0}
 
 
@@ -134,6 +150,44 @@ async def preset_list():
 
 async def preset_create():
     state = QuoteBuilderState()
+    
+    # Auto-populate mandatory components for new presets
+    state.elements = [
+        {
+            "id": str(uuid.uuid4()),
+            "type": "client",
+            "x": int(state.margins["left"]),
+            "y": int(state.margins["top"]),
+            "w": 250,
+            "h": 50,
+            "content": "Mr. /Ms Name Surname",
+            "font_size": 14,
+            "font_bold": True,
+            "font_italic": False
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "type": "date",
+            "x": int(A4_WIDTH - state.margins["right"] - 150),
+            "y": int(state.margins["top"]),
+            "w": 150,
+            "h": 50,
+            "content": "Date 01/01/2002",
+            "font_size": 14,
+            "font_bold": False,
+            "font_italic": False
+        },
+        {
+            "id": str(uuid.uuid4()),
+            "type": "quote",
+            "x": int(state.margins["left"]),
+            "y": int(state.margins["top"] + 100),
+            "w": int(A4_WIDTH - state.margins["left"] - state.margins["right"]),
+            "h": 200,
+            "content": "Sample Quote"
+        }
+    ]
+    
     builder_ui(state)
 
 
@@ -157,10 +211,10 @@ async def preset_edit(id: int):
 
 
 def builder_ui(state: QuoteBuilderState):
+    preview_modal = QuotePreviewModal()
 
     # --- HELPER FUNCTIONS ---
     def enforce_margins(el):
-        """Clamp element coordinates within the defined document margins and strictly enforce 1px precision."""
         max_x = A4_WIDTH - state.margins["right"] - el["w"]
         max_y = A4_HEIGHT - state.margins["bottom"] - el["h"]
         el["x"] = int(round(max(state.margins["left"], min(el["x"], max_x))))
@@ -180,9 +234,10 @@ def builder_ui(state: QuoteBuilderState):
         reapply_margins_to_all()
 
     def select_element(eid):
-        state.selected_id = eid
-        render_canvas_area.refresh()
-        render_properties_panel.refresh()
+        if state.selected_id != eid:
+            state.selected_id = eid
+            render_canvas_area.refresh()
+            render_properties_panel.refresh()
 
     def update_element(el, key, value):
         if key in ["x", "y", "w", "h"]:
@@ -197,6 +252,7 @@ def builder_ui(state: QuoteBuilderState):
         state.selected_id = None
         render_canvas_area.refresh()
         render_properties_panel.refresh()
+        render_components_list.refresh()
 
     def change_zoom(delta):
         state.scale = max(0.2, min(state.scale + delta, 2.0))
@@ -221,6 +277,15 @@ def builder_ui(state: QuoteBuilderState):
         if not state.preset_name.strip():
             ui.notify("Preset name cannot be empty", type="warning")
             return
+
+        types = [e["type"] for e in state.elements]
+        for req in ["client", "date", "quote"]:
+            if types.count(req) == 0:
+                ui.notify(f"Preset must contain a {req.capitalize()} component.", type="warning")
+                return
+            elif types.count(req) > 1:
+                ui.notify(f"Only one {req.capitalize()} component is allowed.", type="warning")
+                return
 
         payload = {
             "name": state.preset_name,
@@ -262,13 +327,70 @@ def builder_ui(state: QuoteBuilderState):
 
     ui.keyboard(on_key=handle_keyboard)
 
+    # Real-time background sync loop to capture native CSS resizes smoothly
+    async def auto_sync_size():
+        if not state.selected_id: return
+        try:
+            res = await ui.run_javascript(f'''
+                var el = document.getElementById("el_{state.selected_id}_base");
+                return el ? {{w: el.offsetWidth, h: el.offsetHeight}} : null;
+            ''', timeout=1.0)
+            if res:
+                target_el = next((x for x in state.elements if x["id"] == state.selected_id), None)
+                if target_el:
+                    new_w = int(round(res['w']))
+                    new_h = int(round(res['h']))
+                    if target_el["w"] != new_w or target_el["h"] != new_h:
+                        target_el["w"] = new_w
+                        target_el["h"] = new_h
+                        render_properties_panel.refresh()
+        except Exception:
+            pass
+
+    ui.timer(0.2, auto_sync_size)
+
     # --- REFRESHABLE UI COMPONENTS ---
+    @ui.refreshable
+    def render_components_list():
+        def on_sidebar_dragstart(e, t):
+            state.dragged_type = t
+            state.dragged_element_id = None
+
+        def component_block(icon_name, label, ctype):
+            is_disabled = ctype in ["client", "date", "quote"] and any(el["type"] == ctype for el in state.elements)
+            base_classes = "w-full bg-gray-50 border border-gray-200 p-2 rounded-md flex-nowrap items-center gap-2"
+
+            if is_disabled:
+                card = ui.row().classes(base_classes + " opacity-50 cursor-not-allowed")
+                with card:
+                    ui.icon(icon_name, size="sm").classes("text-gray-400 shrink-0")
+                    ui.label(label).classes("text-gray-400 font-medium text-sm truncate")
+                    ui.space()
+                    ui.icon("check", size="sm").classes("text-green-500 shrink-0")
+            else:
+                card = ui.row().classes(base_classes + " cursor-grab hover:bg-gray-100 transition-colors").props('draggable="true"')
+                
+                card.on("dragstart", lambda e, t=ctype: on_sidebar_dragstart(e, t))
+                card.on("dragend", lambda e: setattr(state, "dragged_type", None))
+
+                with card:
+                    ui.icon(icon_name, size="sm").classes("text-gray-700 shrink-0")
+                    ui.label(label).classes("text-gray-900 font-medium text-sm truncate")
+
+        with ui.grid(columns=2).classes("w-full gap-2 mt-2"):
+            component_block("text_fields", "Text", "text")
+            component_block("person", "Client", "client")
+            component_block("calendar_today", "Date", "date")
+            component_block("image", "Image", "image")
+            component_block("shopping_cart", "Quote", "quote")
+            component_block("draw", "Sign", "sign")
+
     @ui.refreshable
     def render_canvas_area():
         scaled_w = A4_WIDTH * state.scale
         scaled_h = A4_HEIGHT * state.scale
         
-        with ui.element("div").style(f"width: {scaled_w}px; height: {scaled_h}px; position: relative;"):
+        with ui.element("div").classes("relative").style(f"width: {scaled_w}px; height: {scaled_h}px;"):
             
             with ui.element("div").style(
                 f"width: {A4_WIDTH}px; height: {A4_HEIGHT}px; "
@@ -285,8 +407,6 @@ def builder_ui(state: QuoteBuilderState):
                 canvas.on("dragover.prevent", lambda: None)
 
                 def handle_drop(e):
-                    
-                    # Handle Moving an EXISTING Element
                     if getattr(state, "dragged_element_id", None):
                         el = next((x for x in state.elements if x["id"] == state.dragged_element_id), None)
                         if el:
@@ -303,16 +423,20 @@ def builder_ui(state: QuoteBuilderState):
                         render_canvas_area.refresh()
                         render_properties_panel.refresh()
 
-                    # Handle Dropping a NEW Element from the Sidebar
                     elif getattr(state, "dragged_type", None):
+                        if state.dragged_type in ["client", "date", "quote"] and any(el["type"] == state.dragged_type for el in state.elements):
+                            ui.notify(f"Only one {state.dragged_type.capitalize()} component is allowed.", type="warning")
+                            state.dragged_type = None
+                            return
+
                         target_id = e.args.get("target.id", "")
+                        target_id_clean = target_id.replace("el_", "").replace("_base", "")
                         
                         if target_id == "canvas_bg":
                             x = e.args.get("offsetX", 0)
                             y = e.args.get("offsetY", 0)
-                        elif target_id.startswith("el_"):
-                            el_id = target_id[3:]
-                            target_el = next((x for x in state.elements if x["id"] == el_id), None)
+                        elif target_id_clean:
+                            target_el = next((x for x in state.elements if x["id"] == target_id_clean), None)
                             if target_el:
                                 x = target_el["x"] + e.args.get("offsetX", 0)
                                 y = target_el["y"] + e.args.get("offsetY", 0)
@@ -346,6 +470,19 @@ def builder_ui(state: QuoteBuilderState):
                             "content": content,
                         }
 
+                        if state.dragged_type in ["text", "client", "date"]:
+                            new_element.update({
+                                "font_size": 14, 
+                                "font_bold": state.dragged_type == "client", 
+                                "font_italic": False
+                            })
+                        elif state.dragged_type == "image":
+                            new_element.update({
+                                "image_fit": "contain",
+                                "image_pos_x": 50,
+                                "image_pos_y": 50
+                            })
+
                         enforce_margins(new_element)
                         state.elements.append(new_element)
                         state.selected_id = new_element["id"]
@@ -353,65 +490,41 @@ def builder_ui(state: QuoteBuilderState):
 
                         render_canvas_area.refresh()
                         render_properties_panel.refresh()
+                        render_components_list.refresh()
 
                 canvas.on("drop", handle_drop, ["offsetX", "offsetY", "clientX", "clientY", "target.id"])
                 canvas.on("click", lambda: select_element(None))
 
                 with canvas:
-                    # Draw margins guide
-                    ui.element("div").classes(
-                        "absolute border-2 border-gray-200 border-dashed pointer-events-none"
-                    ).style(
+                    ui.element("div").classes("absolute border-2 border-gray-200 border-dashed pointer-events-none").style(
                         f"top: {state.margins['top']}px; left: {state.margins['left']}px; "
                         f"right: {state.margins['right']}px; bottom: {state.margins['bottom']}px;"
                     )
 
-                    # Draw elements
                     for el in state.elements:
                         is_selected = el["id"] == state.selected_id
                         bg = "bg-blue-50/50" if is_selected else "bg-transparent"
                         border = (
-                            "border-2 border-blue-500 border-dashed"
-                            if is_selected
+                            "border-2 border-blue-500 border-dashed" if is_selected 
                             else "border-2 border-transparent hover:border-gray-300 hover:border-dashed"
                         )
                         
-                        resize_style = "resize: both; overflow: hidden;" if is_selected else "overflow: hidden;"
+                        resize_style = "overflow: hidden;"
+                        if is_selected:
+                            resize_style = "resize: vertical; overflow: hidden;" if el["type"] == "quote" else "resize: both; overflow: hidden;"
+
+                        max_el_w = A4_WIDTH - state.margins["right"] - el["x"]
+                        max_el_h = A4_HEIGHT - state.margins["bottom"] - el["y"]
 
                         with ui.card().classes(
-                            f"absolute {bg} {border} cursor-grab p-2 shadow-none"
+                            f"absolute {bg} {border} p-2 shadow-none"
                         ).style(
                             f"left: {el['x']}px; top: {el['y']}px; width: {el['w']}px; height: {el['h']}px; "
+                            f"max-width: {max_el_w}px; max-height: {max_el_h}px; "
                             f"pointer-events: auto; {resize_style}"
-                        ).props(f'id="el_{el["id"]}" draggable="true"') as item:
+                        ).props(f'id="el_{el["id"]}_base"') as item:
 
                             item.on("mousedown", lambda e, eid=el["id"]: select_element(eid))
-
-                            def on_dragstart(e, eid=el["id"]):
-                                state.dragged_element_id = eid
-                                state.drag_start_x = e.args.get("clientX", 0)
-                                state.drag_start_y = e.args.get("clientY", 0)
-                                target_el = next((x for x in state.elements if x["id"] == eid), None)
-                                if target_el:
-                                    state.drag_start_el_x = target_el["x"]
-                                    state.drag_start_el_y = target_el["y"]
-
-                            item.on("dragstart", on_dragstart, ["clientX", "clientY"])
-                            item.on("dragend", lambda e: setattr(state, "dragged_element_id", None))
-
-                            def on_mouseup(e, eid=el["id"]):
-                                if eid == state.selected_id:
-                                    w = e.args.get("offsetWidth")
-                                    h = e.args.get("offsetHeight")
-                                    if w and h:
-                                        target_el = next((x for x in state.elements if x["id"] == eid), None)
-                                        if target_el and (target_el["w"] != int(round(w)) or target_el["h"] != int(round(h))):
-                                            target_el["w"] = int(round(w))
-                                            target_el["h"] = int(round(h))
-                                            enforce_margins(target_el)
-                                            render_properties_panel.refresh()
-
-                            item.on("mouseup", on_mouseup, ["offsetWidth", "offsetHeight"])
 
                             if is_selected:
                                 def trigger_delete(eid):
@@ -422,21 +535,65 @@ def builder_ui(state: QuoteBuilderState):
                                     "absolute top-1 right-1 text-blue-500 bg-white rounded-full shadow-sm cursor-pointer hover:text-blue-700 z-50"
                                 ).on("mousedown.stop.prevent", lambda e, eid=el["id"]: trigger_delete(eid))
 
+                            def on_dragstart(e, eid=el["id"]):
+                                state.dragged_element_id = eid
+                                state.drag_start_x = e.args.get("clientX", 0)
+                                state.drag_start_y = e.args.get("clientY", 0)
+                                target_el = next((x for x in state.elements if x["id"] == eid), None)
+                                if target_el:
+                                    state.drag_start_el_x = target_el["x"]
+                                    state.drag_start_el_y = target_el["y"]
+
+                            drag_overlay = ui.element('div').classes('absolute top-0 left-0 cursor-grab').style(
+                                'width: calc(100% - 16px); height: calc(100% - 16px); z-index: 10;'
+                            ).props(f'id="el_{el["id"]}" draggable="true"')
+                            
+                            drag_overlay.on("mousedown", lambda e, eid=el["id"]: select_element(eid))
+                            drag_overlay.on("dragstart", on_dragstart, ["clientX", "clientY"])
+                            drag_overlay.on("dragend", lambda e: setattr(state, "dragged_element_id", None))
+
                             # Content Rendering
                             if el["type"] in ["text", "client", "date"]:
-                                ui.label(el["content"]).classes("w-full h-full whitespace-pre-wrap text-gray-800 pointer-events-none")
+                                f_size = el.get("font_size", 14)
+                                f_weight = "bold" if el.get("font_bold") else "normal"
+                                f_style = "italic" if el.get("font_italic") else "normal"
+                                style_str = f"font-size: {f_size}px; font-weight: {f_weight}; font-style: {f_style};"
+                                
+                                ui.label(el["content"]).classes("w-full h-full whitespace-pre-wrap text-gray-800 pointer-events-none").style(style_str)
+                                
                             elif el["type"] == "image":
                                 if el.get("content"):
-                                    ui.image(el["content"]).classes("w-full h-full object-contain pointer-events-none")
+                                    fit_style = el.get("image_fit", "contain")
+                                    pos_x = el.get("image_pos_x", 50)
+                                    pos_y = el.get("image_pos_y", 50)
+                                    ui.element('img').props(f'src="{el["content"]}" draggable="false"').classes(
+                                        f"w-full h-full pointer-events-none object-{fit_style}"
+                                    ).style(f"object-position: {pos_x}% {pos_y}%;")
                                 else:
                                     ui.icon("image", size="xl").classes("absolute-center text-gray-400 pointer-events-none")
+                                    
                             elif el["type"] == "quote":
-                                with ui.column().classes("w-full h-full border border-gray-300 bg-gray-50 p-2 pointer-events-none"):
-                                    ui.label("Quote Table Placeholder").classes("text-gray-500 italic font-bold")
-                                    ui.label("Item 1 ......... $100").classes("text-gray-500 text-sm")
+                                with ui.column().classes("w-full h-full gap-0 pointer-events-none"):
+                                    with ui.row().classes("w-full border-b-2 border-gray-800 pb-2 mb-2 font-bold text-gray-900 text-sm"):
+                                        ui.label("Service").classes("flex-1")
+                                        ui.label("Teeth").classes("w-20 text-center")
+                                        ui.label("Qty").classes("w-16 text-center")
+                                        ui.label("Unit Price").classes("w-32 text-right")
+                                    
+                                    with ui.row().classes("w-full text-gray-800 mb-1 text-sm items-center"):
+                                        ui.label("Sample Dental Service with a very long name that wraps beautifully").classes("flex-1 whitespace-normal line-clamp-2 leading-tight")
+                                        ui.label("11, 12").classes("w-20 text-center text-xs truncate")
+                                        ui.label("1").classes("w-16 text-center")
+                                        ui.label("$150.00").classes("w-32 text-right truncate")
+                                        
+                                    with ui.row().classes("w-full border-t border-gray-400 pt-2 mt-2 font-bold text-gray-900 text-sm"):
+                                        ui.label("Total Amount").classes("flex-1 text-right pr-4")
+                                        ui.label("$150.00").classes("w-32 text-right truncate")
+                                        
                             elif el["type"] == "sign":
-                                ui.label("Signature:").classes("text-xs text-gray-500 absolute top-0 pointer-events-none")
-                                ui.label().classes("border-b border-black w-full absolute-bottom mb-2 pointer-events-none")
+                                with ui.column().classes("w-full h-full justify-end gap-0 pointer-events-none"):
+                                    ui.label("Signature:").classes("text-xs text-gray-500 mb-1")
+                                    ui.label().classes("border-b border-black w-full")
 
     @ui.refreshable
     def render_properties_panel():
@@ -451,25 +608,57 @@ def builder_ui(state: QuoteBuilderState):
             ui.label("Position & Size").classes(Style.h2())
 
             with ui.row().classes("w-full gap-2 mb-2"):
-                ui.number("X", value=el["x"], format="%.0f", step=1, on_change=lambda e, elem=el: update_element(elem, "x", e.value)).classes("flex-1")
+                x_input = ui.number("X", value=el["x"], format="%.0f", step=1, on_change=lambda e, elem=el: update_element(elem, "x", e.value)).classes("flex-1")
+                if el["type"] == "quote": x_input.props('disable')
                 ui.number("Y", value=el["y"], format="%.0f", step=1, on_change=lambda e, elem=el: update_element(elem, "y", e.value)).classes("flex-1")
 
             with ui.row().classes("w-full gap-2 mb-6"):
-                ui.number("W", value=el["w"], format="%.0f", step=1, min=1, on_change=lambda e, elem=el: update_element(elem, "w", e.value)).classes("flex-1")
+                w_input = ui.number("W", value=el["w"], format="%.0f", step=1, min=1, on_change=lambda e, elem=el: update_element(elem, "w", e.value)).classes("flex-1")
+                if el["type"] == "quote": w_input.props('disable')
                 ui.number("H", value=el["h"], format="%.0f", step=1, min=1, on_change=lambda e, elem=el: update_element(elem, "h", e.value)).classes("flex-1")
 
             # --- Content ---
             if el["type"] in ["text", "client", "date"]:
-                ui.label("Content").classes(Style.h2()).classes("mt-4")
+                ui.label("Content & Style").classes(Style.h2()).classes("mt-4")
+                
                 if el["type"] == "client":
-                    ui.label("Will be replaced with actual Client Details during quote generation.").classes("text-xs text-gray-500 mb-2")
+                    ui.label("Will be replaced with actual Client Details during quote generation.").classes("text-xs text-gray-500 mb-4")
                 elif el["type"] == "date":
-                    ui.label("Will be replaced with actual Date during quote generation.").classes("text-xs text-gray-500 mb-2")
+                    ui.label("Will be replaced with actual Date during quote generation.").classes("text-xs text-gray-500 mb-4")
+                
+                with ui.row().classes("w-full justify-between items-center mb-4"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.number("Size", value=el.get("font_size", 14), format="%d", step=1, min=8, max=100,
+                                  on_change=lambda e, elem=el: update_element(elem, "font_size", int(e.value)) if e.value else None).props('dense').classes("w-16")
+                        ui.button(icon="refresh", on_click=lambda e, elem=el: update_element(elem, "font_size", 14)).props("dense flat size=sm").tooltip("Reset to 14px")
                     
-                ui.textarea("Text Value", value=el["content"], on_change=lambda e, elem=el: update_element(elem, "content", e.value)).classes("w-full mb-6")
+                    with ui.row().classes("items-center gap-4"):
+                        ui.checkbox("Bold", value=el.get("font_bold", False),
+                                    on_change=lambda e, elem=el: update_element(elem, "font_bold", e.value)).props('dense')
+                        ui.checkbox("Italic", value=el.get("font_italic", False),
+                                    on_change=lambda e, elem=el: update_element(elem, "font_italic", e.value)).props('dense')
+                
+                if el["type"] == "text":
+                    ui.textarea("Text Value", value=el["content"], on_change=lambda e, elem=el: update_element(elem, "content", e.value)).classes("w-full mb-6")
+                else:
+                    ui.element('div').classes('mb-6')
             
             elif el["type"] == "image":
-                ui.label("Content (Image Source)").classes(Style.h2()).classes("mt-4")
+                ui.label("Display Mode").classes(Style.h2()).classes("mt-4")
+                
+                with ui.row().classes("w-full mb-4"):
+                    ui.radio({"contain": "Fit Entire Image", "cover": "Crop to Fill"}, value=el.get("image_fit", "contain"), 
+                             on_change=lambda e, elem=el: update_element(elem, "image_fit", e.value)).props('inline')
+                
+                if el.get("image_fit") == "cover":
+                    ui.label("Adjust Image Focus (Pan X/Y)").classes("text-sm font-bold text-gray-700")
+                    with ui.row().classes("w-full gap-2 items-center mb-6 mt-2"):
+                        ui.label("X").classes("text-xs font-bold text-gray-500")
+                        ui.slider(min=0, max=100, value=el.get("image_pos_x", 50), on_change=lambda e, elem=el: update_element(elem, "image_pos_x", e.value)).classes("flex-1")
+                        ui.label("Y").classes("text-xs font-bold text-gray-500")
+                        ui.slider(min=0, max=100, value=el.get("image_pos_y", 50), on_change=lambda e, elem=el: update_element(elem, "image_pos_y", e.value)).classes("flex-1")
+                        
+                ui.label("Content (Upload Image)").classes(Style.h2()).classes("mt-4")
                 
                 async def handle_image_upload(e: events.UploadEventArguments):
                     try:
@@ -507,7 +696,6 @@ def builder_ui(state: QuoteBuilderState):
                 if el.get("content"):
                     ui.button("Remove Image", on_click=lambda e, elem=el: update_element(elem, "content", None), icon="delete").classes("w-full mb-6 bg-red-100 text-red-600 hover:bg-red-200").props("unelevated")
 
-            # --- Delete ---
             ui.button("Remove Component", color="negative", icon="delete", on_click=lambda elem_id=el["id"]: remove_element(elem_id)).classes("w-full mt-auto")
 
     @ui.refreshable
@@ -532,73 +720,37 @@ def builder_ui(state: QuoteBuilderState):
     # --- MAIN UI LAYOUT ---
     with ui.column().classes("w-full min-h-[900px] pb-20"):
         
-        # Floating Buttons
         with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
+            ui.button("Preview", color="info", icon="visibility", on_click=lambda: preview_modal.open({"elements": state.elements, "margins": state.margins}, FAKE_QUOTE)).classes("shadow-lg px-6")
             ui.button("Cancel", color="negative", icon="r_close", on_click=lambda: ui.navigate.to("/preset")).classes("shadow-lg px-6")
             ui.button("Save", color="primary", icon="r_save", on_click=save_preset).classes("shadow-lg px-6")
         
-        # Header (No back button)
         page_title = "Edit Preset" if state.editing_preset_id else "New Preset"
         with ui.row().classes("w-full items-center gap-4 mb-4"):
             ui.label(page_title).classes(Style.title()).classes("mb-0")
 
-        # 35% / 60% Layout wrapper
         with ui.row().classes("w-full justify-between items-start"):
             
-            # --- LEFT COLUMN (35%) ---
-            # Standard vertical flow for Left Column
             with ui.column().classes("w-[35%] justify-center gap-4 min-w-[300px]"):
-                
-                # 1. Preset Details (Name)
                 with ui.card().classes("w-full shadow-sm p-4 shrink-0"):
                     ui.label("Preset Details").classes(Style.h2())
                     ui.input("Preset Name").bind_value(state, "preset_name").classes("w-full text-lg")
 
-                # 2. Components List
                 with ui.card().classes("w-full shadow-sm p-4 shrink-0"):
                     ui.label("Components").classes(Style.h2())
-
-                    def on_sidebar_dragstart(e, t):
-                        state.dragged_type = t
-                        state.dragged_element_id = None
-
-                    def component_block(icon_name, label, ctype):
-                        card = ui.row().classes(
-                            "w-full bg-gray-50 border border-gray-200 p-3 rounded-md cursor-grab items-center gap-4 hover:bg-gray-100 transition-colors"
-                        ).props('draggable="true"')
-                        
-                        card.on("dragstart", lambda e, t=ctype: on_sidebar_dragstart(e, t))
-                        card.on("dragend", lambda e: setattr(state, "dragged_type", None))
-
-                        with card:
-                            ui.icon(icon_name, size="sm").classes("text-gray-700")
-                            ui.label(label).classes("text-gray-900 font-medium")
-
-                    component_block("text_fields", "Text", "text")
-                    component_block("person", "Client", "client")
-                    component_block("calendar_today", "Date", "date")
-                    component_block("image", "Image", "image")
-                    component_block("shopping_cart", "Quote", "quote")
-                    component_block("draw", "Sign", "sign")
+                    render_components_list()
                 
-                # 3 & 4. Component Detail (Position, Size, Content)
                 with ui.card().classes("w-full shadow-sm p-4 min-h-[250px] shrink-0"):
                     render_properties_panel()
 
-                # 5. Page Margin
                 with ui.card().classes("w-full shadow-sm p-4 shrink-0"):
                     render_margin_panel()
 
-            # --- RIGHT COLUMN (60%) ---
-            # Outer container is relative and overflow-hidden to anchor the zoom controls
             with ui.element("div").classes("w-[60%] sticky top-6 bg-gray-100 rounded-xl border border-gray-200 shadow-inner h-[calc(100vh-8rem)] z-10 relative overflow-hidden flex flex-col"):
-                
-                # Zoom controls locked to the bottom-center of the OUTER container
                 with ui.row().classes("absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-white border border-gray-200 shadow-sm rounded-lg p-1 gap-1 items-center"):
                     ui.button(icon="remove", on_click=lambda: change_zoom(-0.05)).props("dense flat round size=sm text-color=gray-700")
                     ui.button("Reset", on_click=reset_zoom).props("dense flat size=sm text-color=gray-700").classes("px-2 font-bold")
                     ui.button(icon="add", on_click=lambda: change_zoom(0.05)).props("dense flat round size=sm text-color=gray-700")
 
-                # Inner scrollable wrapper for the actual canvas
                 with ui.column().classes("w-full h-full overflow-auto items-center justify-start p-6"):
                     render_canvas_area()
