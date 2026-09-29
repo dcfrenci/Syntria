@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 from nicegui import app, ui
-
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -17,7 +16,6 @@ from pages.preset import preset_page
 from pages.reminders import reminders_page
 from pages.settings import settings_page
 
-
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         if not app.storage.user.get('authenticated', False):
@@ -25,11 +23,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return RedirectResponse('/login')
         return await call_next(request)
 
-
 app.add_static_files('/assets', 'app/assets')
-
 app.add_middleware(AuthMiddleware)
-
 
 @contextmanager
 def frame(page_title: str, active_route: str):
@@ -38,12 +33,12 @@ def frame(page_title: str, active_route: str):
     # Background color of the whole app
     ui.query('body').classes('bg-white') 
     ui.query('.nicegui-content').classes('pb-32')
-    
+        
     # Render the sidebar with the correct active hover state
     create_sidebar(active_route=active_route)
-    
+        
     # Create the main content container
-    with ui.column().classes('w-full max-w-7xl mx-auto overflow-y-auto'): 
+    with ui.column().classes('w-full max-w-7xl mx-auto overflow-y-auto'):
         yield
 
 # --- Routes Registration ---

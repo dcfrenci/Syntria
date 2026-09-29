@@ -1,5 +1,4 @@
 from datetime import datetime
-from PIL import Image
 import traceback
 
 
@@ -7,6 +6,8 @@ from nicegui import ui
 from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
+from api_client.presets import PresetsClient
+from components.quote_preview_modal import QuotePreviewModal
 from components.teeth_selection import teeth_selection
 from components.modals import confirmation_modal
 from components.style import Style
@@ -26,6 +27,8 @@ def home_page():
 
 
 async def quotes():
+    quote_preview_modal = QuotePreviewModal()
+
     with ui.column().classes("w-full"):
         ui.label("Quote").classes(Style.title())
 
@@ -34,11 +37,11 @@ async def quotes():
             quotes = [
                 {
                     "id": quote["id"],
-                    "name": f"{quote["patient"]["first_name"]} {quote["patient"]["last_name"]}",
+                    "name": f"{quote['patient']['first_name']} {quote['patient']['last_name']}",
                     "created_at": datetime.fromisoformat(quote["created_at"])
                     .date()
                     .strftime("%d/%m/%Y"),
-                    "staff": f"{quote["staff"]["first_name"]} {quote["staff"]["last_name"]}",
+                    "staff": f"{quote['staff']['first_name']} {quote['staff']['last_name']}",
                 }
                 for quote in row_quotes
             ]
@@ -52,7 +55,7 @@ async def quotes():
 
         def edit():
             if check_selected():
-                ui.navigate.to(f"/home/quote_edit/{table_quotes.selected[0]["id"]}")
+                ui.navigate.to(f"/home/quote_edit/{table_quotes.selected[0]['id']}")
 
         def delete():
             async def on_save_callback(result: bool):
@@ -71,6 +74,30 @@ async def quotes():
                     description="Are you sure you want to permanently delete this quote and all its details?",
                     on_save_callback=on_save_callback,
                 ).open()
+
+        async def handle_quote_action(action: str):
+            if not check_selected():
+                return
+                
+            quote_id = table_quotes.selected[0]["id"]
+            
+            try:
+                quote_data = await QuotesClient.get_quote_with_id(quote_id)
+                presets = await PresetsClient.get_presets()
+                active_preset = next((p for p in presets if p.get("is_active")), None)
+                
+                if not active_preset:
+                    ui.notify("No active preset found. Please activate one in Presets.", type="warning")
+                    return
+                
+                # Split traffic based on the user's intent
+                if action in ['print', 'download']:
+                    await quote_preview_modal.process_direct(active_preset, quote_data, action)
+                else:
+                    await quote_preview_modal.open(active_preset, quote_data)
+                    
+            except Exception as e:
+                ui.notify(f"Failed to process quote document: {str(e)}", type="negative")
 
         table_quotes = ui.table(
             columns=[
@@ -112,14 +139,11 @@ async def quotes():
         table_quotes.bind_filter_from(search_input, "value")
 
         with ui.row().classes(Style.row_end()):
-            ui.button(
-                "New",
-                icon="r_add",
-                on_click=lambda: ui.navigate.to("/home/quote_create"),
-            )
+            ui.button("New", icon="r_add", on_click=lambda: ui.navigate.to("/home/quote_create"))
             ui.button("Edit", icon="r_edit", on_click=edit)
-            ui.button("Print", icon="r_print", on_click=lambda: 10)
-            ui.button("Download", icon="r_download", on_click=lambda: 10)
+            ui.button("Preview", icon="visibility", on_click=lambda: handle_quote_action("preview"))
+            ui.button("Print", icon="r_print", on_click=lambda: handle_quote_action("print"))
+            ui.button("Download", icon="r_download", on_click=lambda: handle_quote_action("download"))
             ui.button("Delete", icon="r_delete", on_click=delete)
 
 
@@ -376,7 +400,7 @@ async def quote_detail(
                         {
                             **row,
                             "teeth_display": (
-                                ", ".join(row["teeth"]) if row["teeth"] else "-"
+                                ", ".join(str(t) for t in row["teeth"]) if row["teeth"] else "-"
                             ),
                         }
                     )
