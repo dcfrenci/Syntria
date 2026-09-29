@@ -5,7 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import Base, engine, get_db
-from app.routers import items, users, categories, persons, auth, reservations, quotes, roles, reminders, presets
+from app.routers import items, users, categories, persons, auth, reservations, quotes, roles, reminders, presets, import_export
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -43,6 +43,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(reservations.router, prefix="/api/v1")
 app.include_router(quotes.router, prefix="/api/v1")
 app.include_router(presets.router, prefix="/api/v1")
+app.include_router(import_export.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Health"], status_code=status.HTTP_200_OK)

@@ -2,7 +2,6 @@ import uuid
 import base64
 import inspect
 from datetime import datetime
-
 from nicegui import ui, events
 from components.style import Style
 from components.modals import confirmation_modal
@@ -15,19 +14,21 @@ A4_HEIGHT = 1123
 
 # Mock Quote Data for Preview Generation with corrected total amount
 FAKE_QUOTE = {
-  "valid_until": "2026-09-25",  "id": 0,  "status": "Draft",  "total_amount": "1970.00",  
-  "patient": { "first_name": "Mario", "last_name": "Rossi" },  
-  "quote_items": [    
-    { "quantity": 1, "item": { "name": "Dental Cleaning", "price": "80", "is_specific": False }, "teeth": [] },
+  "valid_until": "2026-09-25",
+  "id": 0,
+  "status": "Draft",
+  "total_amount": "1970.00",
+    "patient": { "first_name": "Mario", "last_name": "Rossi" },
+    "quote_items": [
+        { "quantity": 1, "item": { "name": "Dental Cleaning", "price": "80", "is_specific": False }, "teeth": [] },
     { "quantity": 2, "item": { "name": "Cavity Filling", "price": "120", "is_specific": True }, "teeth": [11, 12] },
     { "quantity": 1, "item": { "name": "Root Canal", "price": "500", "is_specific": True }, "teeth": [24] },
     { "quantity": 1, "item": { "name": "Crown Installation", "price": "850", "is_specific": True }, "teeth": [31] },
     { "quantity": 4, "item": { "name": "X-Ray", "price": "25", "is_specific": False }, "teeth": [] },
     { "quantity": 1, "item": { "name": "Teeth Whitening", "price": "200", "is_specific": False }, "teeth": [] }
-  ],  
-  "created_at": "2026-09-25T15:23:36.631Z"
+  ],
+    "created_at": "2026-09-25T15:23:36.631Z"
 }
-
 
 class QuoteBuilderState:
     def __init__(self):
@@ -44,7 +45,6 @@ class QuoteBuilderState:
         self.preset_name = ""
         self.scale = 0.75  
         self.margins = {"top": 96.0, "right": 96.0, "bottom": 96.0, "left": 96.0}
-
 
 def preset_page():
     """Renders the Customize Quote view & Drag-and-Drop Builder using Subpages"""
@@ -88,6 +88,10 @@ async def preset_list():
             except Exception as e:
                 ui.notify(f"Error updating preset: {e}", type="negative")
 
+        async def on_set_active_click():
+            if check_selected(table_presets, "preset"):
+                await set_active(table_presets.selected[0]['id'])
+
         def edit_preset():
             if check_selected(table_presets, "preset"):
                 ui.navigate.to(f"/preset/edit/{table_presets.selected[0]['id']}")
@@ -107,7 +111,7 @@ async def preset_list():
             columns=[
                 {"name": "name", "label": "Preset Name", "field": "name", "align": "left", "sortable": True},
                 {"name": "created_at", "label": "Date Created", "field": "created_at", "align": "left", "sortable": True},
-                {"name": "active", "label": "Active", "field": "active", "align": "left", "sortable": True},
+                {"name": "is_active", "label": "Active", "field": "is_active", "align": "left", "sortable": True},
             ],
             rows=await load_presets(),
             row_key="id",
@@ -124,15 +128,13 @@ async def preset_list():
             table_presets.bind_filter_from(search_input, "value")
 
         table_presets.add_slot(
-            "body-cell-active",
+            "body-cell-is_active",
             """
             <q-td :props="props">
-                <q-badge v-if="props.row.active" color="positive" text-color="white" label="Yes" />
-                <q-btn v-else flat size="sm" color="primary" label="Set Active" @click="$parent.$emit('set_active', props.row)" />
+                <q-badge v-if="props.row.is_active" color="positive" text-color="white" label="Active" />
             </q-td>
-        """,
+            """,
         )
-        table_presets.on("set_active", lambda e: set_active(e.args["id"]))
 
         delete_diag = confirmation_modal(
             title="Delete Preset?",
@@ -141,6 +143,7 @@ async def preset_list():
         )
 
         with ui.row().classes(Style.row_end()):
+            ui.button("Set Active", icon="check_circle", on_click=on_set_active_click)
             ui.button("New", icon="r_add", on_click=lambda: ui.navigate.to("/preset/create"))
             ui.button("Edit", icon="r_edit", on_click=edit_preset)
             ui.button(
@@ -301,7 +304,6 @@ def builder_ui(state: QuoteBuilderState):
                 payload["is_active"] = False
                 await PresetsClient.create_preset(payload)
                 ui.notify("New preset created successfully", type="positive")
-
             ui.navigate.to("/preset")
         except Exception as e:
             ui.notify(f"Failed to save preset: {e}", type="negative")
@@ -315,7 +317,6 @@ def builder_ui(state: QuoteBuilderState):
         if not el: return
 
         step = 10 if e.modifiers.shift else 1
-
         if e.key.name == "ArrowUp": el["y"] -= step
         elif e.key.name == "ArrowDown": el["y"] += step
         elif e.key.name == "ArrowLeft": el["x"] -= step
@@ -346,7 +347,7 @@ def builder_ui(state: QuoteBuilderState):
                         render_properties_panel.refresh()
         except Exception:
             pass
-
+            
     ui.timer(0.2, auto_sync_size)
 
     # --- REFRESHABLE UI COMPONENTS ---
@@ -359,7 +360,7 @@ def builder_ui(state: QuoteBuilderState):
         def component_block(icon_name, label, ctype):
             is_disabled = ctype in ["client", "date", "quote"] and any(el["type"] == ctype for el in state.elements)
             base_classes = "w-full bg-gray-50 border border-gray-200 p-2 rounded-md flex-nowrap items-center gap-2"
-
+            
             if is_disabled:
                 card = ui.row().classes(base_classes + " opacity-50 cursor-not-allowed")
                 with card:
@@ -372,7 +373,7 @@ def builder_ui(state: QuoteBuilderState):
                 
                 card.on("dragstart", lambda e, t=ctype: on_sidebar_dragstart(e, t))
                 card.on("dragend", lambda e: setattr(state, "dragged_type", None))
-
+                
                 with card:
                     ui.icon(icon_name, size="sm").classes("text-gray-700 shrink-0")
                     ui.label(label).classes("text-gray-900 font-medium text-sm truncate")
@@ -384,6 +385,7 @@ def builder_ui(state: QuoteBuilderState):
             component_block("image", "Image", "image")
             component_block("shopping_cart", "Quote", "quote")
             component_block("draw", "Sign", "sign")
+
 
     @ui.refreshable
     def render_canvas_area():
@@ -403,9 +405,9 @@ def builder_ui(state: QuoteBuilderState):
                     .style("padding: 0; border-radius: 4px;")
                     .props('id="canvas_bg"')
                 )
-        
+            
                 canvas.on("dragover.prevent", lambda: None)
-
+                
                 def handle_drop(e):
                     if getattr(state, "dragged_element_id", None):
                         el = next((x for x in state.elements if x["id"] == state.dragged_element_id), None)
@@ -447,7 +449,7 @@ def builder_ui(state: QuoteBuilderState):
 
                         w, h = 200, 50
                         content = f"Sample {state.dragged_type.capitalize()}"
-
+                        
                         if state.dragged_type == "image": 
                             w, h = 150, 150
                             content = None
@@ -469,7 +471,7 @@ def builder_ui(state: QuoteBuilderState):
                             "h": int(round(h)),
                             "content": content,
                         }
-
+                        
                         if state.dragged_type in ["text", "client", "date"]:
                             new_element.update({
                                 "font_size": 14, 
@@ -523,22 +525,23 @@ def builder_ui(state: QuoteBuilderState):
                             f"max-width: {max_el_w}px; max-height: {max_el_h}px; "
                             f"pointer-events: auto; {resize_style}"
                         ).props(f'id="el_{el["id"]}_base"') as item:
-
+                            
                             item.on("mousedown", lambda e, eid=el["id"]: select_element(eid))
-
+                            
                             if is_selected:
                                 def trigger_delete(eid):
                                     state.element_to_delete = eid
                                     delete_element_diag.open()
-
+                                
                                 ui.icon("cancel", size="xs").classes(
                                     "absolute top-1 right-1 text-blue-500 bg-white rounded-full shadow-sm cursor-pointer hover:text-blue-700 z-50"
                                 ).on("mousedown.stop.prevent", lambda e, eid=el["id"]: trigger_delete(eid))
-
+                            
                             def on_dragstart(e, eid=el["id"]):
                                 state.dragged_element_id = eid
                                 state.drag_start_x = e.args.get("clientX", 0)
                                 state.drag_start_y = e.args.get("clientY", 0)
+                                
                                 target_el = next((x for x in state.elements if x["id"] == eid), None)
                                 if target_el:
                                     state.drag_start_el_x = target_el["x"]
@@ -571,7 +574,7 @@ def builder_ui(state: QuoteBuilderState):
                                     ).style(f"object-position: {pos_x}% {pos_y}%;")
                                 else:
                                     ui.icon("image", size="xl").classes("absolute-center text-gray-400 pointer-events-none")
-                                    
+                                
                             elif el["type"] == "quote":
                                 with ui.column().classes("w-full h-full gap-0 pointer-events-none"):
                                     with ui.row().classes("w-full border-b-2 border-gray-800 pb-2 mb-2 font-bold text-gray-900 text-sm"):
@@ -579,13 +582,14 @@ def builder_ui(state: QuoteBuilderState):
                                         ui.label("Teeth").classes("w-20 text-center")
                                         ui.label("Qty").classes("w-16 text-center")
                                         ui.label("Unit Price").classes("w-32 text-right")
-                                    
+                                        
                                     with ui.row().classes("w-full text-gray-800 mb-1 text-sm items-center"):
                                         ui.label("Sample Dental Service with a very long name that wraps beautifully").classes("flex-1 whitespace-normal line-clamp-2 leading-tight")
                                         ui.label("11, 12").classes("w-20 text-center text-xs truncate")
                                         ui.label("1").classes("w-16 text-center")
                                         ui.label("$150.00").classes("w-32 text-right truncate")
                                         
+                                    ui.space()
                                     with ui.row().classes("w-full border-t border-gray-400 pt-2 mt-2 font-bold text-gray-900 text-sm"):
                                         ui.label("Total Amount").classes("flex-1 text-right pr-4")
                                         ui.label("$150.00").classes("w-32 text-right truncate")
@@ -594,6 +598,7 @@ def builder_ui(state: QuoteBuilderState):
                                 with ui.column().classes("w-full h-full justify-end gap-0 pointer-events-none"):
                                     ui.label("Signature:").classes("text-xs text-gray-500 mb-1")
                                     ui.label().classes("border-b border-black w-full")
+
 
     @ui.refreshable
     def render_properties_panel():
@@ -606,12 +611,11 @@ def builder_ui(state: QuoteBuilderState):
         if el:
             # --- Position & Size ---
             ui.label("Position & Size").classes(Style.h2())
-
             with ui.row().classes("w-full gap-2 mb-2"):
                 x_input = ui.number("X", value=el["x"], format="%.0f", step=1, on_change=lambda e, elem=el: update_element(elem, "x", e.value)).classes("flex-1")
                 if el["type"] == "quote": x_input.props('disable')
                 ui.number("Y", value=el["y"], format="%.0f", step=1, on_change=lambda e, elem=el: update_element(elem, "y", e.value)).classes("flex-1")
-
+            
             with ui.row().classes("w-full gap-2 mb-6"):
                 w_input = ui.number("W", value=el["w"], format="%.0f", step=1, min=1, on_change=lambda e, elem=el: update_element(elem, "w", e.value)).classes("flex-1")
                 if el["type"] == "quote": w_input.props('disable')
@@ -641,14 +645,14 @@ def builder_ui(state: QuoteBuilderState):
                 if el["type"] == "text":
                     ui.textarea("Text Value", value=el["content"], on_change=lambda e, elem=el: update_element(elem, "content", e.value)).classes("w-full mb-6")
                 else:
-                    ui.element('div').classes('mb-6')
+                    ui.element('div').classes('mb-6') 
             
             elif el["type"] == "image":
                 ui.label("Display Mode").classes(Style.h2()).classes("mt-4")
                 
                 with ui.row().classes("w-full mb-4"):
-                    ui.radio({"contain": "Fit Entire Image", "cover": "Crop to Fill"}, value=el.get("image_fit", "contain"), 
-                             on_change=lambda e, elem=el: update_element(elem, "image_fit", e.value)).props('inline')
+                    ui.radio({"contain": "Fit Entire Image", "cover": "Crop to Fill"}, value=el.get("image_fit", "contain"),
+                              on_change=lambda e, elem=el: update_element(elem, "image_fit", e.value)).props('inline')
                 
                 if el.get("image_fit") == "cover":
                     ui.label("Adjust Image Focus (Pan X/Y)").classes("text-sm font-bold text-gray-700")
@@ -657,8 +661,8 @@ def builder_ui(state: QuoteBuilderState):
                         ui.slider(min=0, max=100, value=el.get("image_pos_x", 50), on_change=lambda e, elem=el: update_element(elem, "image_pos_x", e.value)).classes("flex-1")
                         ui.label("Y").classes("text-xs font-bold text-gray-500")
                         ui.slider(min=0, max=100, value=el.get("image_pos_y", 50), on_change=lambda e, elem=el: update_element(elem, "image_pos_y", e.value)).classes("flex-1")
-                        
-                ui.label("Content (Upload Image)").classes(Style.h2()).classes("mt-4")
+                
+                ui.label("Content (Upload Image - Max 2MB)").classes(Style.h2()).classes("mt-4")
                 
                 async def handle_image_upload(e: events.UploadEventArguments):
                     try:
@@ -669,7 +673,7 @@ def builder_ui(state: QuoteBuilderState):
                             file_like = e.file
                         else:
                             file_like = next((getattr(e, a) for a in dir(e) if hasattr(getattr(e, a), 'read')), None)
-                            
+                        
                         if not file_like:
                             ui.notify("Upload failed: No readable file payload found.", type="negative")
                             return
@@ -679,7 +683,7 @@ def builder_ui(state: QuoteBuilderState):
                             content = await content_or_coro
                         else:
                             content = content_or_coro
-                            
+                        
                         encoded = base64.b64encode(content).decode('utf-8')
                         
                         ext = getattr(e, 'name', 'image.png').split('.')[-1].lower()
@@ -691,18 +695,24 @@ def builder_ui(state: QuoteBuilderState):
                     except Exception as ex:
                         ui.notify(f"Error processing image: {ex}", type="negative")
 
-                ui.upload(on_upload=handle_image_upload, auto_upload=True, max_files=1).classes('w-full mb-4').props('accept="image/*" flat bordered')
+                ui.upload(
+                    on_upload=handle_image_upload, 
+                    auto_upload=True, 
+                    max_files=1,
+                    on_rejected=lambda: ui.notify('Image is too large. Please upload an image under 2MB.', type='negative')
+                ).classes('w-full mb-4').props('accept="image/*" flat bordered max-file-size=2097152')
                 
                 if el.get("content"):
                     ui.button("Remove Image", on_click=lambda e, elem=el: update_element(elem, "content", None), icon="delete").classes("w-full mb-6 bg-red-100 text-red-600 hover:bg-red-200").props("unelevated")
 
             ui.button("Remove Component", color="negative", icon="delete", on_click=lambda elem_id=el["id"]: remove_element(elem_id)).classes("w-full mt-auto")
 
+
     @ui.refreshable
     def render_margin_panel():
         ui.label("Document Margins").classes(Style.h2())
         ui.label("Standard A4 Size (794x1123 px)").classes("text-xs text-gray-400 mb-4")
-
+        
         with ui.grid(columns=2).classes("w-full gap-2 mb-4"):
             ui.number("Top", value=state.margins["top"], format="%.0f", step=1, min=0, on_change=lambda e: update_margin("top", e.value))
             ui.number("Bottom", value=state.margins["bottom"], format="%.0f", step=1, min=0, on_change=lambda e: update_margin("bottom", e.value))
@@ -715,7 +725,6 @@ def builder_ui(state: QuoteBuilderState):
             render_margin_panel.refresh()
 
         ui.button("Restore Default", icon="restore", on_click=restore_defaults).classes("w-full bg-gray-200 text-gray-700 hover:bg-gray-300").props("unelevated")
-
 
     # --- MAIN UI LAYOUT ---
     with ui.column().classes("w-full min-h-[900px] pb-20"):

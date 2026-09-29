@@ -7,6 +7,8 @@ class ComponentType(str, Enum):
     IMAGE = "image"
     QUOTE = "quote"
     SIGN = "sign"
+    CLIENT = "client"
+    DATE = "date"    
 
 class MarginSchema(BaseModel):
     top: float = Field(default=96.0)
@@ -22,6 +24,12 @@ class ComponentSchema(BaseModel):
     w: float
     h: float
     content: str | None = None
+    font_size: int | None = None
+    font_bold: bool | None = None
+    font_italic: bool | None = None
+    image_fit: str | None = None
+    image_pos_x: float | None = None
+    image_pos_y: float | None = None
 
 class PresetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
