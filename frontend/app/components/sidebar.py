@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 
 def create_sidebar(active_route: str = '/'):
     """Generates the navigation drawer with hover and active states."""
@@ -25,6 +25,17 @@ def create_sidebar(active_route: str = '/'):
         with ui.column().classes('w-full gap-2'):
             menu_item('r_home', 'Home', '/home')
             menu_item('r_menu_book', 'Agenda', '/agenda')
+            menu_item('r_person', 'Persons', '/persons')
             menu_item('r_attach_money', 'Pricing', '/pricing')
             menu_item('r_edit', 'Customize quote', '/preset')
             menu_item('r_settings', 'Setting', '/settings')
+            
+        ui.space()
+
+        def perform_logout():
+            app.storage.user['authenticated'] = False
+            app.storage.user['token'] = None
+            ui.navigate.to('/login')
+            
+        # 3. Add the logout button
+        ui.button('Logout', icon='logout', color='negative', on_click=perform_logout).classes('w-full mb-4')

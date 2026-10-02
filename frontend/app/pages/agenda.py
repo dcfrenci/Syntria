@@ -160,4 +160,4 @@ async def agenda_page():
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
 
         ui.button(icon="notifications_none")
-        ui.button(icon="add", on_click=new_reservation)
+        ui.button("New", icon="add", on_click=new_reservation)

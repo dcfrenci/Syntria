@@ -99,3 +99,15 @@ async def login_for_access_token(
     access_token = create_access_token(data=token_data)
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Verifies that the authenticated user has the 'Admin' role."""
+    if current_user.role.name.lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted. Admin privileges required.",
+        )
+    return current_user

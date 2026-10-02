@@ -8,7 +8,7 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models import Role, User, Person, Reservation
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, get_current_admin_user
 from app.schemas.roles import RoleCreate, RoleResponse
 from app.schemas.users import (
     UserCreate,
@@ -101,7 +101,7 @@ async def create_role(
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     # 1. Check if Person exists
     person = await db.get(Person, payload.person_id)
@@ -189,7 +189,7 @@ async def list_users(
 async def get_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     user = (
         await db.execute(
@@ -212,7 +212,7 @@ async def update_user(
     user_id: int,
     payload: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     user = (
         await db.execute(
@@ -255,7 +255,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_admin_user),
 ):
     user = await db.get(User, user_id)
     if not user:

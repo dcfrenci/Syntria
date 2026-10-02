@@ -16,6 +16,8 @@ class APIClient:
                 response = await client.get(f"{BASE_URL}{endpoint}", headers=headers, params=params)
                 response.raise_for_status()
                 return response.json()
+            except httpx.HTTPStatusError as e:
+                raise e  # Propagate status errors (like 403) to the UI for popups
             except httpx.HTTPError as e:
                 print(f"GET request failed for {endpoint}: {e}")
                 return None
@@ -29,6 +31,8 @@ class APIClient:
                 response = await client.post(f"{BASE_URL}{endpoint}", json=data, headers=headers)
                 response.raise_for_status()
                 return response.json()
+            except httpx.HTTPStatusError as e:
+                raise e
             except httpx.HTTPError as e:
                 print(f"POST request failed for {endpoint}: {e}")
                 return None
@@ -42,6 +46,8 @@ class APIClient:
                 response = await client.patch(f"{BASE_URL}{endpoint}", json=data, headers=headers)
                 response.raise_for_status()
                 return response.json()
+            except httpx.HTTPStatusError as e:
+                raise e
             except httpx.HTTPError as e:
                 print(f"PATCH request failed for {endpoint}: {e}")
                 return None
@@ -55,6 +61,8 @@ class APIClient:
                 response = await client.delete(f"{BASE_URL}{endpoint}", headers=headers)
                 response.raise_for_status()
                 return True
+            except httpx.HTTPStatusError as e:
+                raise e
             except httpx.HTTPError as e:
                 print(f"DELETE request failed for {endpoint}: {e}")
                 return False
