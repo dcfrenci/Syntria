@@ -1,18 +1,31 @@
-# Database Empty
+# Database Initilization
+To initialize the database use the following python script.
+```bash
+python3 scripts/initialize.py --admin-only
+```
+The script also allows to **prefill** the database with the following data.
+```bash
+python3 scripts/initialize.py
+```
+The data that will be loaded using this script are divided into two paragraph based on the option selected during the initialization.
 
-## Reminder
+---
+
+## Empty Database
+
+### Reminder
 | Name     |
 | -------- |
 | Sms      |
 | WhatsApp |
 | Telegram |
 
-## Persons
-| Name       | Surname     | Email                      | Birthdate  | Phone      | Reminder pref ID |
-| ---------- | ----------- | -------------------------- | ---------- | ---------- | ---------------- |
-| Admin      | System      | admin@email.com            | 01/01/0001 | 0000000000 | (Sms)            |
+### Persons
+| Name  | Surname | Email           | Birthdate  | Phone      | Reminder pref ID |
+| ----- | ------- | --------------- | ---------- | ---------- | ---------------- |
+| Admin | System  | admin@email.com | 01/01/0001 | 0000000000 | (Sms)            |
 
-## Role
+### Role
 | Name      | Restricted Access Power |
 | --------- | ----------------------- |
 | Admin     | 0                       |
@@ -23,18 +36,17 @@
 | Emploee   | 4                       |
 | Client    | 10                      |
 
-## Users
-| Person ID            | Role ID   | Active | Password |
-| -------------------- | --------- | ------ | -------- |
-| (Admin System)       | admin     | True   | asTf82#1 |
+### Users
+| Person ID      | Role ID | Active | Password |
+| -------------- | ------- | ------ | -------- |
+| (Admin System) | admin   | True   | asTf82#1 |
 
 
+---
 
+## Database Prefill
 
-
-# Database Prefill
-
-## Persons
+### Persons
 | Name       | Surname     | Email                      | Birthdate  | Phone      | Reminder pref ID |
 | ---------- | ----------- | -------------------------- | ---------- | ---------- | ---------------- |
 | Francesco  | Della Casa  | francesco@gmai.com         | 01/01/2000 | 3701307257 | (WhatsApp)       |
@@ -75,7 +87,7 @@
 | Martina    | D'Amico     | marty.damico@email.com     | 14/02/2003 | 3491122334 | (WhatsApp)       |
 
 
-## Users
+### Users
 | Person ID            | Role ID   | Active | Password |
 | -------------------- | --------- | ------ | -------- |
 | (Matteo Bergamaschi) | manager   | True   | kL9$zQ2w |
@@ -90,7 +102,7 @@
 | (Sara Russo)         | client    | True   | vC9@hJ7L |
 
 
-## Reservations
+### Reservations
 | Reservation Date         | Duration min. | Description | Patient ID          | Staff IDs                         |
 | ------------------------ | ------------- | ----------- | ------------------- | --------------------------------- |
 | 2026-10-02T18:29:16.671Z | 30            | description | (Elisa Copolla)     | [(Marco Bianchi), (Giulia Rossi)] |
@@ -116,7 +128,7 @@
 | 2026-10-07T11:15:00.000Z | 60            | description | (Elisa Coppola)     | [(Sofia Ricci)]                   |
 
 
-## Categories
+### Categories
 | Name                  | Description                                                     | Active |
 | --------------------- | --------------------------------------------------------------- | ------ |
 | Orthodontics          | Teeth alignment and braces                                      | True   |
@@ -132,7 +144,7 @@
 | Dental Emergency      | Urgent care for severe toothaches and dental trauma             | False  |
 
 
-## Items
+### Items
 | Name                        | Description                                        | Price | Category ID             | Active | Specific |
 | --------------------------- | -------------------------------------------------- | ----- | ----------------------- | ------ | -------- |
 | Dental Cleaning             | Remuval of plaque, tartar and bacteria             | 80    | (Cosmetic Dentistry)    | True   | False    |
@@ -238,7 +250,7 @@
 | Lost Crown Recementation    | Urgent fixing of a dislodged permanent crown       | 80    | (Dental Emergency)      | True   | True     |
 
 
-## Quote
+### Quote
 | Valid Until | Patient ID          | Staff ID        | Items                      | Quantity | Discout | Teeth            |
 | ----------- | ------------------- | --------------- | -------------------------- | -------- | ------- | ---------------- |
 | 2026-10-02  | (Chiara Esposito)   | (Marco Bianchi) | (Implant Maintenance)      | 1        | 0       | []               |

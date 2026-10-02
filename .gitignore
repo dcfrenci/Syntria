@@ -1,3 +1,4 @@
 .venv/*
 .env
 frontend/.nicegui/
+scripts/__pycache__

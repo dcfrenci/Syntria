@@ -1,11 +1,21 @@
+import argparse
 import requests
-from datetime import datetime, timedelta, timezone
+from seed_data import (
+    get_reminders,
+    get_roles,
+    get_categories,
+    get_persons,
+    get_users,
+    get_items,
+    get_reservations,
+    get_quotes,
+)
 
 BASE_URL = "http://localhost:8000/api/v1"
 
 
 def post_data(endpoint: str, data: list, token: str):
-    """Helper method to iterate through data and make POST requests using the auth token."""
+    """Helper method to iterate through data and make POST requests using the auth token[cite: 2]."""
     url = f"{BASE_URL}/{endpoint}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     ids = []
@@ -25,11 +35,11 @@ def post_data(endpoint: str, data: list, token: str):
 
 
 def bootstrap_system():
-    """Bootstraps the admin role, admin person, and admin user."""
+    """Bootstraps the admin role, admin person, and admin user[cite: 2]."""
     print("--- Bootstrapping System ---")
 
-    # 1. Bootstrap Role
-    role_payload = {"name": "Admin", "description": "System Administrator"}
+    # 1. Bootstrap Role[cite: 2]
+    role_payload = {"name": "Admin"}
     role_response = requests.post(f"{BASE_URL}/users/bootstrap_role", json=role_payload)
     print(f"Bootstrap Role Status: {role_response.status_code}")
 
@@ -37,26 +47,28 @@ def bootstrap_system():
     if role_response.status_code in [200, 201]:
         role_id = role_response.json().get("id", 1)
 
-    # 2. Create Admin Person
+    # 2. Create Admin Person (Trailing slash added to avoid 307 redirect)
     person_payload = {
         "first_name": "Admin",
         "last_name": "System",
         "email": "admin@email.com",
-        "phone": "0000000000",
+        "phone_number": "0000000000",
+        "birth_date": "0001-01-01",
     }
-    person_response = requests.post(f"{BASE_URL}/persons", json=person_payload)
+    person_response = requests.post(f"{BASE_URL}/persons/", json=person_payload)
     print(f"Create Admin Person Status: {person_response.status_code}")
 
     person_id = 1
     if person_response.status_code in [200, 201]:
         person_id = person_response.json().get("id", 1)
 
-    # 3. Bootstrap Admin User
+    # 3. Bootstrap Admin User (Restored email field as requested)[cite: 1, 2]
     admin_credentials = {
         "email": "admin@email.com",
-        "password": "12345678",
+        "password": "asTf82#1",
         "person_id": person_id,
         "role_id": role_id,
+        "is_active": True,
     }
     user_response = requests.post(
         f"{BASE_URL}/users/bootstrap_user", json=admin_credentials
@@ -66,13 +78,11 @@ def bootstrap_system():
 
 
 def auth():
-    """Logs in with the admin credentials and returns the access token."""
+    """Logs in with the admin credentials and returns the access token[cite: 2]."""
     print("--- Authenticating ---")
 
-    # FastAPI typically expects form data (OAuth2PasswordRequestForm) for login, using "username" field for the email
-    login_data = {"username": "admin@email.com", "password": "12345678"}
+    login_data = {"username": "admin@email.com", "password": "asTf82#1"}  # [cite: 1, 4]
 
-    # Adjust this endpoint if your auth router uses /auth/login instead of /auth/token
     response = requests.post(f"{BASE_URL}/auth/token", data=login_data)
 
     if response.status_code == 200:
@@ -87,187 +97,91 @@ def auth():
         return None
 
 
+def create_reminders(token: str):
+    reminders = get_reminders()
+    # Trailing slashes added to endpoints below to prevent 307 redirects
+    ids = post_data("reminders/", reminders, token)
+    return dict(zip([r["name"] for r in reminders], ids))
+
+
 def create_roles(token: str):
-    roles = [{"name": "Manager"}, {"name": "User"}, {"name": "Guest"}]
-    return post_data("roles", roles, token)
+    roles = get_roles()
+    ids = post_data("roles/", roles, token)
+
+    role_map = dict(zip([r["name"] for r in roles], ids))
+    role_map["Admin"] = 1
+    return role_map
 
 
-def create_users(token: str, roles_ids: list, persons_ids: list):
-    users = [
-        {
-            "person_id": persons_ids[0],
-            "role_id": roles_ids[0],
-            "is_active": True,
-            "password": "password123",
-        },
-        {
-            "person_id": persons_ids[1],
-            "role_id": roles_ids[1],
-            "is_active": True,
-            "password": "password123",
-        },
-        {
-            "person_id": persons_ids[2],
-            "role_id": roles_ids[2],
-            "is_active": True,
-            "password": "password123",
-        },
-    ]
-    return post_data("users", users, token)
+def create_persons(token: str, rem_map: dict):
+    persons = get_persons(rem_map)
+    ids = post_data("persons/", persons, token)
+
+    p_map = dict(zip([f"{p['first_name']} {p['last_name']}" for p in persons], ids))
+    p_map["Elisa Copolla"] = p_map["Elisa Coppola"]
+    return p_map
 
 
-def create_persons(token: str, reminders_ids: list):
-    persons = [
-        {
-            "first_name": "Alice",
-            "last_name": "Smith",
-            "phone_number": "3395550101",
-            "email": "alice@client.com",
-            "birth_date": "1969-10-21",
-            "reminder_preference_id": reminders_ids[0],
-        },
-        {
-            "first_name": "Bob",
-            "last_name": "Jones",
-            "phone_number": "3395550102",
-            "email": "bob@client.com",
-            "birth_date": "1999-05-11",
-            "reminder_preference_id": reminders_ids[1],
-        },
-        {
-            "first_name": "Charlie",
-            "last_name": "Brown",
-            "phone_number": "3395550103",
-            "email": "charlie@client.com",
-            "birth_date": "1999-01-17",
-            "reminder_preference_id": reminders_ids[2],
-        },
-    ]
-    return post_data("persons", persons, token)
+def create_users(token: str, roles_map: dict, p_map: dict):
+    users = get_users(roles_map, p_map)
+    return post_data("users/", users, token)
 
 
 def create_categories(token: str):
-    categories = [
-        {"name": "Dental Services", "description": "General dental procedures"},
-        {"name": "Orthodontics", "description": "Braces and aligners"},
-        {"name": "Surgery", "description": "Surgical procedures"},
-    ]
-    return post_data("categories", categories, token)
+    categories = get_categories()
+    ids = post_data("categories/", categories, token)
+    return dict(zip([c["name"] for c in categories], ids))
 
 
-def create_items(token: str, categories_ids: list):
-    items = [
-        {"name": "Teeth Cleaning", "description": "Dental cleaning", "price": 100.0, "category_id": categories_ids[0], "is_active": True, "is_specific": True},
-        {"name": "Metal Braces", "description": "Application of metal braces", "price": 2500.0, "category_id": categories_ids[1], "is_active": True, "is_specific": False},
-        {
-            "name": "Wisdom Tooth Extraction",
-            "description": "Extraction of teeth",
-            "price": 400.0,
-            "category_id": categories_ids[2],
-            "is_active": True, 
-            "is_specific": False
-        },
-    ]
-    return post_data("items", items, token)
+def create_items(token: str, c_map: dict):
+    items = get_items(c_map)
+    ids = post_data("items/", items, token)
+    return dict(zip([i["name"] for i in items], ids))
 
 
-def create_quotes(token: str, persons_ids: list, items_ids: list):
-    now = datetime.now()
-    quotes = [
-        {
-            "valid_until": (now + timedelta(days=15)).strftime("%Y-%m-%d"),
-            "patient_id": persons_ids[0],
-            "staff_id": persons_ids[0],
-            "items": [
-                {"item_id": items_ids[0], "quantity": 1, "discount": 0.0},
-                {"item_id": items_ids[1], "quantity": 1, "discount": 10.0},
-            ],
-        },
-        {
-            "valid_until": (now + timedelta(days=30)).strftime("%Y-%m-%d"),
-            "patient_id": persons_ids[1],
-            "staff_id": persons_ids[1],
-            "items": [{"item_id": items_ids[1], "quantity": 2, "discount": 5.0}],
-        },
-        {
-            "valid_until": (now + timedelta(days=10)).strftime("%Y-%m-%d"),
-            "patient_id": persons_ids[2],
-            "staff_id": persons_ids[2],
-            "items": [{"item_id": items_ids[2], "quantity": 1, "discount": 0.0}],
-        },
-    ]
-
-    return post_data("quotes", quotes, token)
+def create_reservations(token: str, p_map: dict):
+    reservations = get_reservations(p_map)
+    return post_data("reservations/", reservations, token)
 
 
-def create_reservations(token: str, persons_ids: list):
-    now = datetime.now(timezone.utc)
-    reservations = [
-        {
-            "reservation_date": (now + timedelta(days=1)).strftime(
-                "%Y-%m-%dT%H:%M:%S.000Z"
-            ),
-            "duration_minutes": 30,
-            "description": "Initial consultation and dental checkup",
-            "patient_id": persons_ids[0],
-            "staff_ids": [persons_ids[0]],
-        },
-        {
-            "reservation_date": (now + timedelta(days=2)).strftime(
-                "%Y-%m-%dT%H:%M:%S.000Z"
-            ),
-            "duration_minutes": 60,
-            "description": "Deep teeth cleaning and whitening procedure",
-            "patient_id": persons_ids[1],
-            "staff_ids": [persons_ids[1]],
-        },
-        {
-            "reservation_date": (now + timedelta(days=3)).strftime(
-                "%Y-%m-%dT%H:%M:%S.000Z"
-            ),
-            "duration_minutes": 45,
-            "description": "Follow-up for cavity filling",
-            "patient_id": 3,
-            "staff_ids": [1],
-        },
-        {
-            "reservation_date": (now + timedelta(days=4)).strftime(
-                "%Y-%m-%dT%H:%M:%S.000Z"
-            ),
-            "duration_minutes": 90,
-            "description": "Braces adjustment and tightening",
-            "patient_id": persons_ids[2],
-            "staff_ids": [persons_ids[2]],
-        },
-    ]
-
-    return post_data("reservations", reservations, token)
-
-
-def create_reminders(token: str):
-    reminders = [{"name": "sms"}, {"name": "whatapp"}, {"name": "Telegram"}]
-    return post_data("reminders", reminders, token)
+def create_quotes(token: str, p_map: dict, i_map: dict):
+    quotes = get_quotes(p_map, i_map)
+    return post_data("quotes/", quotes, token)
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Database initialization script.")
+    parser.add_argument(
+        "--admin-only",
+        action="store_true",
+        help="Only bootstrap the admin role, person, and user. Skips the rest of the database prefill.",
+    )
+    args = parser.parse_args()
+
     print("Starting database population...\n")
 
     # 1. Bootstrap the core admin dependencies
     bootstrap_system()
 
-    # 2. Authenticate to get the token
-    token = auth()
-
-    # 3. Proceed only if authentication was successful
-    if token:
-        roles_ids = create_roles(token)
-        remainders_ids = create_reminders(token)
-        persons_ids = create_persons(token, remainders_ids)
-        users_ids = create_users(token, roles_ids, persons_ids)
-        categories_ids = create_categories(token)
-        items_ids = create_items(token, categories_ids)
-        quotes_ids = create_quotes(token, persons_ids, items_ids)
-        reservations_ids = create_reservations(token, persons_ids)
-        print("Database population complete.")
+    if args.admin_only:
+        print("Admin-only flag provided. Skipping prefill data.")
     else:
-        print("Aborting database population due to authentication failure.")
+        # 2. Authenticate to get the token
+        token = auth()
+
+        if token:
+            rem_map = create_reminders(token)
+            roles_map = create_roles(token)
+            p_map = create_persons(token, rem_map)
+
+            users_ids = create_users(token, roles_map, p_map)
+
+            c_map = create_categories(token)
+            i_map = create_items(token, c_map)
+
+            quotes_ids = create_quotes(token, p_map, i_map)
+            reservations_ids = create_reservations(token, p_map)
+
+            print("Database population complete.")
+        else:
+            print("Aborting database population due to authentication failure.")
