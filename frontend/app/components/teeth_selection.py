@@ -174,7 +174,7 @@ def teeth_selection(on_save_callback):
             nonlocal current_selection
             current_selection = set(initial_teeth or [])
             has_primary = any(
-                t.startswith(("5", "6", "7", "8")) for t in current_selection
+                str(t).startswith(("5", "6", "7", "8")) for t in current_selection
             )
             primary_switch.value = has_primary
             img_permanent.set_visibility(not has_primary)

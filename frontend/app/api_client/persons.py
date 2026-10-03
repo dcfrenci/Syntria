@@ -1,12 +1,29 @@
 import httpx
 from api_client.base import APIClient
 
+
 class PersonsClient:
     @staticmethod
     async def get_persons():
         try:
-            result = await APIClient.get("/persons/")
-            return result.get("persons", []) if result else []
+            all_persons = []
+            skip = 0
+            limit = 100
+
+            while True:
+                result = await APIClient.get(f"/persons/?skip={skip}&limit={limit}")
+                if not result:
+                    break
+                batch = result.get("persons", [])
+                if not batch:
+                    break
+                all_persons.extend(batch)
+                total = result.get("total", 0)
+                skip += limit
+                if skip >= total:
+                    break
+
+            return all_persons
         except httpx.HTTPError:
             return []
 

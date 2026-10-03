@@ -247,7 +247,7 @@ async def update_user(
         setattr(user, field, value)
 
     await db.flush()
-    await db.refresh(user, ["person", "role"])
+    await db.refresh(user)
     return user
 
 

@@ -1,11 +1,40 @@
+import httpx
 from api_client.base import APIClient
 
 class ServicesClient:
     @staticmethod
-    async def get_items():
-        """Fetches all items/services."""
-        result = await APIClient.get("/items/")
-        return result.get("items", []) if result else []
+    async def get_items(is_active: bool | None = None):
+        """Fetches all items/services with pagination and optional filtering."""
+        try:
+            all_items = []
+            skip = 0
+            limit = 100
+
+            while True:
+                params = {"skip": skip, "limit": limit}
+                if is_active is not None:
+                    params["is_active"] = is_active
+
+                result = await APIClient.get("/items/", params=params)
+                
+                if not result:
+                    break
+                    
+                batch = result.get("items", [])
+                if not batch:
+                    break
+                    
+                all_items.extend(batch)
+                
+                total = result.get("total", 0)
+                skip += limit
+                
+                if skip >= total:
+                    break
+                    
+            return all_items
+        except httpx.HTTPError:
+            return []
     
     @staticmethod
     async def create_item(data: dict):
@@ -29,10 +58,38 @@ class ServicesClient:
         return await APIClient.delete(f"/items/{item_id}")
 
     @staticmethod
-    async def get_categories():
-        """Fetches all categories."""
-        result = await APIClient.get("/categories/")
-        return result.get("categories", []) if result else []
+    async def get_categories(is_active: bool | None = None):
+        """Fetches all categories with pagination and optional filtering."""
+        try:
+            all_categories = []
+            skip = 0
+            limit = 100
+
+            while True:
+                params = {"skip": skip, "limit": limit}
+                if is_active is not None:
+                    params["is_active"] = is_active
+
+                result = await APIClient.get("/categories/", params=params)
+                
+                if not result:
+                    break
+                    
+                batch = result.get("categories", [])
+                if not batch:
+                    break
+                    
+                all_categories.extend(batch)
+                
+                total = result.get("total", 0)
+                skip += limit
+                
+                if skip >= total:
+                    break
+                    
+            return all_categories
+        except httpx.HTTPError:
+            return []
     
     @staticmethod
     async def create_category(data: dict):
@@ -49,5 +106,5 @@ class ServicesClient:
         return await APIClient.patch(f"/categories/{category_id}", data=data)
     
     @staticmethod
-    async def detete_category(category_id: int):
+    async def delete_category(category_id: int):
         return await APIClient.delete(f"/categories/{category_id}")

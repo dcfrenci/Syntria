@@ -535,7 +535,7 @@ def get_items(c_map: dict):
             "price": 120,
             "category_id": c_map["Oral Surgery"],
             "is_active": True,
-            "is_specific": False,
+            "is_specific": True,
         },
         {
             "name": "Child Routine Checkup",
@@ -567,7 +567,7 @@ def get_items(c_map: dict):
             "price": 95,
             "category_id": c_map["Restorative Dentistry"],
             "is_active": True,
-            "is_specific": False,
+            "is_specific": True,
         },
         {
             "name": "Amalgam Filling",
@@ -727,7 +727,7 @@ def get_items(c_map: dict):
             "price": 180,
             "category_id": c_map["Cosmetic Dentistry"],
             "is_active": True,
-            "is_specific": False,
+            "is_specific": True,
         },
         {
             "name": "Gum Contouring",
@@ -1719,4 +1719,61 @@ def get_quotes(p_map: dict, i_map: dict):
                 }
             ],
         },
+    ]
+
+
+def get_presets():
+    return [
+        {
+            "name": "Default",
+            "is_active": True,
+            "elements": [
+                {
+                    "id": "d3630e5a-c359-4e05-96fd-35e24ec8614f",
+                    "type": "client",
+                    "x": 96,
+                    "y": 96,
+                    "w": 250,
+                    "h": 50,
+                    "content": "Mario Rossi",
+                    "font_size": 14,
+                    "font_bold": False,
+                    "font_italic": False,
+                    "image_fit": None,
+                    "image_pos_x": None,
+                    "image_pos_y": None,
+                },
+                {
+                    "id": "df3a4f06-85d9-4611-a750-95c093c07b75",
+                    "type": "date",
+                    "x": 548,
+                    "y": 96,
+                    "w": 150,
+                    "h": 50,
+                    "content": "Date 01/01/2002",
+                    "font_size": 14,
+                    "font_bold": False,
+                    "font_italic": False,
+                    "image_fit": None,
+                    "image_pos_x": None,
+                    "image_pos_y": None,
+                },
+                {
+                    "id": "ad607791-c2de-4917-8eb0-6a9297fdb20f",
+                    "type": "quote",
+                    "x": 96,
+                    "y": 196,
+                    "w": 602,
+                    "h": 200,
+                    "content": "Sample Quote",
+                    "font_size": None,
+                    "font_bold": None,
+                    "font_italic": None,
+                    "image_fit": None,
+                    "image_pos_x": None,
+                    "image_pos_y": None,
+                },
+            ],
+            "margins": {"top": 96, "right": 96, "bottom": 96, "left": 96},
+        }
     ]

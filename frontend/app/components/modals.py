@@ -5,6 +5,7 @@ from components.style import Style
 
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
+from api_client.users import UsersClient
 from api_client.services import ServicesClient
 from api_client.agenda import AgendaClient
 
@@ -159,32 +160,44 @@ async def reservation_modal(
         start_hour=h_start, end_hour=h_end, h_header=40, h_row=20, mt_row=1
     )
 
+    # State dictionary to hold the true YYYY-MM-DD date decoupled from the UI display
+    res_state = {"date": ""}
+
     async def get_calendar() -> tuple:
         target_date = (
-            datetime.strptime(date_sel.value, "%Y-%m-%d").date()
-            if date_sel.value != ""
+            datetime.strptime(res_state["date"], "%Y-%m-%d").date()
+            if res_state["date"]
             else date.today()
         )
-        if doctor.value is None or date_sel.value == "":
+        if doctor.value is None or not res_state["date"]:
             return target_date, []
         week_reservation = await AgendaClient.get_reservations_doctor_week(
-            doctor_id=doctor.value, start_date=date_sel.value
+            doctor_id=doctor.value, start_date=res_state["date"]
         )
         return target_date, week_reservation
 
-    async def reload():
+    async def reload(e=None):
         target_date, week_reservation = await get_calendar()
         my_calendar.update_calendar(
             new_dates=[target_date], new_reservations=week_reservation
         )
 
-    def new_event():
+    def new_event(e=None):
         if time.value is None or duration.value is None:
             return
         my_calendar.update_new_event(time=time.value, duration=duration.value)
 
+    # Fetch data and filter doctors / active services
     raw_persons = await PersonsClient.get_persons()
-    raw_services = await ServicesClient.get_items()
+    all_users = await UsersClient.get_users()
+    raw_services = await ServicesClient.get_items(is_active=True)
+
+    doctors = {
+        u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
+        for u in all_users
+        if u.get("role", {}).get("name", "").lower() == "doctor"
+        and u.get("is_active", True)
+    }
 
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl p-6"):
         ui.label(title).classes(Style.h1())
@@ -194,20 +207,50 @@ async def reservation_modal(
             with ui.column().classes("w-[30%]"):
                 doctor = ui.select(
                     label="Doctor",
-                    options={
-                        p["id"]: f"{p["first_name"]} {p["last_name"]}"
-                        for p in raw_persons
-                    },
+                    options=doctors,
                     on_change=reload,
                 ).classes(Style.p())
+
                 patient = ui.select(
                     label="Patient",
                     options={
-                        p["id"]: f"{p["first_name"]} {p["last_name"]}"
+                        p["id"]: f"{p['first_name']} {p['last_name']}"
                         for p in raw_persons
                     },
                 ).classes(Style.p())
-                date_sel = ui.date_input("Date", on_change=reload).classes(Style.p())
+
+                # --- Custom DD/MM/YYYY Date Picker ---
+                init_date = res_state.get("date")
+                display_date = (
+                    datetime.strptime(
+                        str(init_date).split("T")[0], "%Y-%m-%d"
+                    ).strftime("%d/%m/%Y")
+                    if init_date
+                    else ""
+                )
+
+                async def on_date_pick(e):
+                    res_state["date"] = e.value
+                    date_sel.value = datetime.strptime(e.value, "%Y-%m-%d").strftime(
+                        "%d/%m/%Y"
+                    )
+                    menu.close()
+                    await reload()
+
+                with ui.input("Date", value=display_date).classes(
+                    f"{Style.p()} cursor-pointer"
+                ).props("readonly") as date_sel:
+                    with date_sel.add_slot("append"):
+                        ui.icon("calendar_today").classes("cursor-pointer").on(
+                            "click", lambda: menu.open()
+                        )
+                    with ui.menu() as menu:
+                        date_picker = ui.date(
+                            value=init_date, mask="YYYY-MM-DD", on_change=on_date_pick
+                        )
+                    date_sel.on("click", menu.open)
+                # -------------------------------------
+
                 time = ui.select(
                     label="Time",
                     options=[
@@ -219,9 +262,11 @@ async def reservation_modal(
                     ],
                     on_change=new_event,
                 ).classes(Style.p())
+
                 service = ui.select(
                     label="Service", options={s["id"]: s["name"] for s in raw_services}
                 ).classes(Style.p())
+
                 duration = ui.number("Duration minutes", on_change=new_event).classes(
                     Style.p()
                 )
@@ -229,7 +274,6 @@ async def reservation_modal(
 
             # Calendar view
             with ui.row().classes("w-[60%] justify-center"):
-
                 target_date, week_reservation = await get_calendar()
 
                 my_calendar.build(
@@ -239,20 +283,28 @@ async def reservation_modal(
                     day_width=200,
                 )
 
-        if doctor_id:
-            raw_doctor = next((p for p in raw_persons if p["id"] == doctor_id), None)
-            doctor.value = raw_doctor["id"]
+        # Safely initialize values based on IDs
+        if doctor_id and doctor_id in doctors:
+            doctor.value = doctor_id
 
         if reservation_id:
             reservation = await AgendaClient.get_reservation_with_id(reservation_id)
             patient.value = reservation["patient"]["id"]
-            date_sel.value = datetime.fromisoformat(
-                reservation["reservation_date"]
-            ).strftime("%Y-%m-%d")
+
+            # Setup the custom date picker state
+            raw_date = datetime.fromisoformat(reservation["reservation_date"]).strftime(
+                "%Y-%m-%d"
+            )
+            res_state["date"] = raw_date
+            date_sel.value = datetime.strptime(raw_date, "%Y-%m-%d").strftime(
+                "%d/%m/%Y"
+            )
+            date_picker.value = raw_date
+
             time.value = datetime.fromisoformat(
                 reservation["reservation_date"]
             ).strftime("%H:%M")
-            # service.value = reservation["item"]["id"]
+            # service.value = reservation.get("item", {}).get("id")
             duration.value = reservation["duration_minutes"]
             description.value = reservation["description"]
 
@@ -269,22 +321,22 @@ async def reservation_modal(
         async def handle_save(value: bool):
             if value:
                 if (
-                    doctor.value == None
-                    or patient.value == None
-                    or date_sel.value == ""
-                    or time.value == None
-                    or service.value == None
-                    or duration.value == None
-                    or description.value == None
+                    doctor.value is None
+                    or patient.value is None
+                    or not res_state["date"]
+                    or time.value is None
+                    or duration.value is None
+                    or description.value is None
                 ):
                     ui.notify(
                         message="Fill out all the details before saving", type="warning"
                     )
                     return
 
+                # Construct the payload using the true YYYY-MM-DD state format
                 reservation = {
                     "reservation_date": datetime.strptime(
-                        f"{date_sel.value} {time.value}", "%Y-%m-%d %H:%M"
+                        f"{res_state['date']} {time.value}", "%Y-%m-%d %H:%M"
                     )
                     .replace(tzinfo=timezone.utc)
                     .strftime("%Y-%m-%dT%H:%M:%S.000Z"),

@@ -7,6 +7,7 @@ from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
 from api_client.presets import PresetsClient
+from api_client.users import UsersClient
 from components.quote_preview_modal import QuotePreviewModal
 from components.teeth_selection import teeth_selection
 from components.modals import confirmation_modal
@@ -78,26 +79,33 @@ async def quotes():
         async def handle_quote_action(action: str):
             if not check_selected():
                 return
-                
+
             quote_id = table_quotes.selected[0]["id"]
-            
+
             try:
                 quote_data = await QuotesClient.get_quote_with_id(quote_id)
                 presets = await PresetsClient.get_presets()
                 active_preset = next((p for p in presets if p.get("is_active")), None)
-                
+
                 if not active_preset:
-                    ui.notify("No active preset found. Please activate one in Presets.", type="warning")
+                    ui.notify(
+                        "No active preset found. Please activate one in Presets.",
+                        type="warning",
+                    )
                     return
-                
+
                 # Split traffic based on the user's intent
-                if action in ['print', 'download']:
-                    await quote_preview_modal.process_direct(active_preset, quote_data, action)
+                if action in ["print", "download"]:
+                    await quote_preview_modal.process_direct(
+                        active_preset, quote_data, action
+                    )
                 else:
                     await quote_preview_modal.open(active_preset, quote_data)
-                    
+
             except Exception as e:
-                ui.notify(f"Failed to process quote document: {str(e)}", type="negative")
+                ui.notify(
+                    f"Failed to process quote document: {str(e)}", type="negative"
+                )
 
         table_quotes = ui.table(
             columns=[
@@ -139,11 +147,25 @@ async def quotes():
         table_quotes.bind_filter_from(search_input, "value")
 
         with ui.row().classes(Style.row_end()):
-            ui.button("New", icon="r_add", on_click=lambda: ui.navigate.to("/home/quote_create"))
+            ui.button(
+                "New",
+                icon="r_add",
+                on_click=lambda: ui.navigate.to("/home/quote_create"),
+            )
             ui.button("Edit", icon="r_edit", on_click=edit)
-            ui.button("Preview", icon="visibility", on_click=lambda: handle_quote_action("preview"))
-            ui.button("Print", icon="r_print", on_click=lambda: handle_quote_action("print"))
-            ui.button("Download", icon="r_download", on_click=lambda: handle_quote_action("download"))
+            ui.button(
+                "Preview",
+                icon="visibility",
+                on_click=lambda: handle_quote_action("preview"),
+            )
+            ui.button(
+                "Print", icon="r_print", on_click=lambda: handle_quote_action("print")
+            )
+            ui.button(
+                "Download",
+                icon="r_download",
+                on_click=lambda: handle_quote_action("download"),
+            )
             ui.button("Delete", icon="r_delete", on_click=delete)
 
 
@@ -164,19 +186,25 @@ async def quote_detail(
 
         ui.label(title).classes(Style.title())
 
-        # Staff selection and detail
+        persons = {p["id"]: p for p in await PersonsClient.get_persons()}
+
+        doctor_person_ids = {
+            u["person"]["id"]
+            for u in await UsersClient.get_users()
+            if u.get("role", {}).get("name", "").lower() == "doctor"
+        }
+
+        # Doctor selection and detail
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
 
-            persons = {p["id"]: p for p in await PersonsClient.get_persons()}
-
             with ui.column():
-
                 ui.label("Select Doctor").classes(Style.h2())
-
                 with ui.card().classes("w-full"):
+                    # Only include persons that are in the doctor_person_ids set
                     names = {
                         k: f"{v['first_name']} {v['last_name']}"
                         for k, v in persons.items()
+                        if k in doctor_person_ids
                     }
                     ui.select(options=names, with_input=True).bind_value(
                         staff_selected, "staff_id"
@@ -211,8 +239,6 @@ async def quote_detail(
         # Patient selection and details
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
 
-            persons = {p["id"]: p for p in await PersonsClient.get_persons()}
-
             with ui.column():
 
                 ui.label("Select Patient").classes(Style.h2())
@@ -227,9 +253,36 @@ async def quote_detail(
                     ).classes(Style.p())
 
                 with ui.card().classes("w-full"):
-                    ui.date_input(placeholder="Valid period").classes(
-                        Style.p()
-                    ).bind_value(date_selected, "date")
+                    init_date = date_selected.get("date")
+                    display_date = (
+                        datetime.strptime(
+                            str(init_date).split("T")[0], "%Y-%m-%d"
+                        ).strftime("%d/%m/%Y")
+                        if init_date
+                        else ""
+                    )
+
+                    def on_date_pick(e):
+                        date_selected["date"] = e.value
+                        date_input.value = datetime.strptime(
+                            e.value, "%Y-%m-%d"
+                        ).strftime("%d/%m/%Y")
+                        menu.close()
+
+                    with ui.input("Valid until", value=display_date).classes(
+                        f"{Style.p()} cursor-pointer"
+                    ).props("readonly") as date_input:
+                        with date_input.add_slot("append"):
+                            ui.icon("calendar_today").classes("cursor-pointer").on(
+                                "click", lambda: menu.open()
+                            )
+                        with ui.menu() as menu:
+                            ui.date(
+                                value=init_date,
+                                mask="YYYY-MM-DD",
+                                on_change=on_date_pick,
+                            )
+                        date_input.on("click", menu.open)
 
             with ui.column():
                 ui.label("Patient Details").classes(Style.h2())
@@ -364,21 +417,26 @@ async def quote_detail(
             def save_teeth_selection(selected_teeth: set):
                 global active_selected_id
                 row_id = active_selected_id
-                services_selected[row_id]["teeth"] = sorted(list(selected_teeth))
+                services_selected[row_id]["teeth"] = sorted(
+                    [int(t) for t in selected_teeth]
+                )
                 refresh_selected_table()
                 ui.notify(
-                    f"Updated teeth for service {services_selected[row_id]["name"]}",
+                    f"Updated teeth for service {services_selected[row_id]['name']}",
                     type="positive",
                 )
 
             def open_teeth_modal(selected_item: dict | None):
                 global active_selected_id
-                if selected_item is None and not table_selected.selected:
-                    ui.notify(
-                        "Select a service in the right table to assign teeth",
-                        type="warning",
-                    )
-                    return
+
+                if selected_item is None:
+                    if not table_selected.selected:
+                        ui.notify(
+                            "Select a service in the right table to assign teeth",
+                            type="warning",
+                        )
+                        return
+                    selected_item = table_selected.selected[0]
 
                 if not selected_item.get("is_specific", False):
                     ui.notify(
@@ -386,11 +444,11 @@ async def quote_detail(
                     )
                     return
 
-                if selected_item is None:
-                    selected_item = table_selected.selected[0]
-
                 row_id = active_selected_id = selected_item["id"]
-                current_teeth = services_selected[row_id].get("teeth", [])
+
+                current_teeth = [
+                    str(t) for t in services_selected[row_id].get("teeth", [])
+                ]
                 teeth_dialog_instance.open_with_teeth(current_teeth)
 
             def format_selected_rows():
@@ -400,7 +458,9 @@ async def quote_detail(
                         {
                             **row,
                             "teeth_display": (
-                                ", ".join(str(t) for t in row["teeth"]) if row["teeth"] else "-"
+                                ", ".join(str(t) for t in row["teeth"])
+                                if row["teeth"]
+                                else "-"
                             ),
                         }
                     )

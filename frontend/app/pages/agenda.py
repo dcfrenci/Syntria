@@ -2,6 +2,7 @@ from nicegui import ui
 import datetime
 from api_client.agenda import AgendaClient
 from api_client.persons import PersonsClient
+from api_client.users import UsersClient
 from components.style import Style
 from components.calendar import Calendar
 from components.modals import reservation_modal
@@ -85,8 +86,8 @@ class Agenda:
 START_HOUR = 7
 END_HOUR = 20
 my_calendar = Calendar(
-        start_hour=START_HOUR, end_hour=END_HOUR, h_header=40, h_row=35, mt_row=5
-    )
+    start_hour=START_HOUR, end_hour=END_HOUR, h_header=40, h_row=35, mt_row=5
+)
 my_agenda = Agenda(calendar_instance=my_calendar)
 
 
@@ -129,35 +130,39 @@ async def edit_reservation(reservation_id: int):
 
 
 async def agenda_page():
-
-    persons = await PersonsClient.get_persons()
-    doctors = {p["id"]: f"{p["first_name"]} {p["last_name"]}" for p in persons}
+    all_users = await UsersClient.get_users()
+    doctors = {
+        u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
+        for u in all_users
+        if u.get("role", {}).get("name", "").lower() == "doctor"
+        and u.get("is_active", True)
+    }
 
     ui.label("Agenda").classes(Style.title())
 
     # Doctor selection
     with ui.row().classes(Style.row_center()):
 
-        async def update_agenda():
-            await my_agenda.set_doctor(doctor_id=doctor.value)
+        async def update_agenda(e):
+            if e.value:
+                await my_agenda.set_doctor(doctor_id=e.value)
 
-        doctor = ui.select(
+        ui.select(
             label="Select doctor", options=doctors, on_change=update_agenda
         ).classes(f"max-w-1/3 {Style.p()}")
 
     with ui.column().classes("w-full"):
         my_agenda.date_navigator()
-        
+
         my_calendar.build(
             dates=my_agenda.get_current_week_dates(),
             on_callback=edit_reservation,
             time_width=50,
             day_width=130,
-            reservations=[]
+            reservations=[],
         )
 
     # Floating buttons
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
-
-        ui.button(icon="notifications_none")
+        # ui.button(icon="notifications_none")
         ui.button("New", icon="add", on_click=new_reservation)

@@ -9,13 +9,14 @@ from seed_data import (
     get_items,
     get_reservations,
     get_quotes,
+    get_presets,
 )
 
 BASE_URL = "http://localhost:8000/api/v1"
 
 
 def post_data(endpoint: str, data: list, token: str):
-    """Helper method to iterate through data and make POST requests using the auth token[cite: 2]."""
+    """Helper method to iterate through data and make POST requests using the auth token."""
     url = f"{BASE_URL}/{endpoint}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     ids = []
@@ -35,10 +36,10 @@ def post_data(endpoint: str, data: list, token: str):
 
 
 def bootstrap_system():
-    """Bootstraps the admin role, admin person, and admin user[cite: 2]."""
+    """Bootstraps the admin role, admin person, and admin user."""
     print("--- Bootstrapping System ---")
 
-    # 1. Bootstrap Role[cite: 2]
+    # 1. Bootstrap Role
     role_payload = {"name": "Admin"}
     role_response = requests.post(f"{BASE_URL}/users/bootstrap_role", json=role_payload)
     print(f"Bootstrap Role Status: {role_response.status_code}")
@@ -62,7 +63,7 @@ def bootstrap_system():
     if person_response.status_code in [200, 201]:
         person_id = person_response.json().get("id", 1)
 
-    # 3. Bootstrap Admin User (Restored email field as requested)[cite: 1, 2]
+    # 3. Bootstrap Admin User
     admin_credentials = {
         "email": "admin@email.com",
         "password": "asTf82#1",
@@ -78,10 +79,10 @@ def bootstrap_system():
 
 
 def auth():
-    """Logs in with the admin credentials and returns the access token[cite: 2]."""
+    """Logs in with the admin credentials and returns the access token."""
     print("--- Authenticating ---")
 
-    login_data = {"username": "admin@email.com", "password": "asTf82#1"}  # [cite: 1, 4]
+    login_data = {"username": "admin@email.com", "password": "asTf82#1"}
 
     response = requests.post(f"{BASE_URL}/auth/token", data=login_data)
 
@@ -99,7 +100,6 @@ def auth():
 
 def create_reminders(token: str):
     reminders = get_reminders()
-    # Trailing slashes added to endpoints below to prevent 307 redirects
     ids = post_data("reminders/", reminders, token)
     return dict(zip([r["name"] for r in reminders], ids))
 
@@ -149,6 +149,11 @@ def create_quotes(token: str, p_map: dict, i_map: dict):
     return post_data("quotes/", quotes, token)
 
 
+def create_presets(token: str):
+    presets = get_presets()
+    return post_data("presets/", presets, token)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Database initialization script.")
     parser.add_argument(
@@ -178,6 +183,8 @@ if __name__ == "__main__":
 
             c_map = create_categories(token)
             i_map = create_items(token, c_map)
+
+            presets_ids = create_presets(token)
 
             quotes_ids = create_quotes(token, p_map, i_map)
             reservations_ids = create_reservations(token, p_map)

@@ -1,4 +1,5 @@
 import httpx
+from datetime import datetime
 from nicegui import ui
 from api_client.persons import PersonsClient
 from api_client.users import UsersClient
@@ -20,7 +21,11 @@ def handle_api_error(e: Exception, action: str):
                 position="top",
             )
         else:
-            detail = e.response.json().get("detail", "Unknown error")
+            try:
+                detail = e.response.json().get("detail", "Unknown error")
+            except Exception:
+                detail = e.response.text or f"HTTP {e.response.status_code}"
+            
             ui.notify(f"Failed to {action}: {detail}", type="warning")
     else:
         ui.notify(f"System error while trying to {action}: {e}", type="negative")
@@ -30,7 +35,7 @@ async def persons_page():
     """Renders the comprehensive Directory, Users, Roles, and Reminders view."""
 
     with ui.column().classes("w-full gap-10"):
-        ui.label("System Directory & Access").classes(Style.title())
+        ui.label("System Manager & Access").classes(Style.title())
 
         def add_search(table, placeholder: str):
             with table.add_slot("top"):
@@ -48,14 +53,26 @@ async def persons_page():
                 return False
             return True
 
-        # ==========================================
-        # 1. PERSONS TABLE
-        # ==========================================
+        # Persons
         with ui.column().classes("w-full"):
-            ui.label("Persons Directory").classes(Style.h2())
+            ui.label("Persons").classes(Style.h2())
 
+            # 1. Add a formatting function for the birth dates
+            async def format_persons():
+                raw = await PersonsClient.get_persons()
+                for p in raw:
+                    if p.get("birth_date"):
+                        try:
+                            p["birth_date"] = datetime.strptime(
+                                str(p["birth_date"]).split("T")[0], "%Y-%m-%d"
+                            ).strftime("%d/%m/%Y")
+                        except ValueError:
+                            pass
+                return raw
+
+            # 2. Update the refresh function to use formatted data
             async def refresh_persons():
-                table_persons.rows = await PersonsClient.get_persons()
+                table_persons.rows = await format_persons()
                 table_persons.selected.clear()
                 table_persons.update()
 
@@ -81,7 +98,6 @@ async def persons_page():
                     except Exception as e:
                         handle_api_error(e, "delete person")
 
-            # Async click handlers for Person Modals
             async def open_new_person():
                 m = await person_modal("New Person", save_person)
                 await m.open()
@@ -129,7 +145,8 @@ async def persons_page():
                         "align": "left",
                     },
                 ],
-                rows=await PersonsClient.get_persons(),
+                # 3. Supply the formatted data on initial load
+                rows=await format_persons(),
                 row_key="id",
                 selection="single",
             ).classes(Style.table())
@@ -154,11 +171,9 @@ async def persons_page():
                     ),
                 )
 
-        # ==========================================
-        # 2. USERS TABLE
-        # ==========================================
+        # User table
         with ui.column().classes("w-full"):
-            ui.label("System Users").classes(Style.h2())
+            ui.label("Account").classes(Style.h2())
 
             async def format_users():
                 try:

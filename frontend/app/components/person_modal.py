@@ -19,6 +19,7 @@ class PersonModal:
             "phone_number": "",
             "reminder_preference_id": None,
         }
+        self.original_person_data = {}
 
     async def build(self):
         # Fetch existing person data if editing
@@ -26,6 +27,7 @@ class PersonModal:
             person = await PersonsClient.get_person(self.person_id)
             if person:
                 self.person_data = {k: person.get(k) for k in self.person_data.keys()}
+                self.original_person_data = self.person_data.copy() # Snapshot original state
 
         # Fetch reminder preferences for the dropdown
         try:
@@ -105,7 +107,16 @@ class PersonModal:
         if self.person_data["reminder_preference_id"] == "":
             self.person_data["reminder_preference_id"] = None
 
-        await self.on_save_callback(self.person_data, self.person_id)
+        # Create a true PATCH payload
+        if self.person_id:
+            payload = {}
+            for key, value in self.person_data.items():
+                if value != self.original_person_data.get(key):
+                    payload[key] = value
+        else:
+            payload = self.person_data.copy()
+
+        await self.on_save_callback(payload, self.person_id)
         self.dialog.close()
 
     async def open(self):
@@ -131,6 +142,7 @@ class UserModal:
             "password": "",
             "is_active": True,
         }
+        self.original_user_data = {}
 
     async def build(self):
         # Fetch data for dropdowns
@@ -149,6 +161,7 @@ class UserModal:
                 self.user_data["person_id"] = user.get("person", {}).get("id")
                 self.user_data["role_id"] = user.get("role", {}).get("id")
                 self.user_data["is_active"] = user.get("is_active", True)
+                self.original_user_data = self.user_data.copy() # Snapshot original state
 
         with ui.dialog() as self.dialog, ui.card().classes(
             "w-full max-w-lg p-6 rounded-xl"
@@ -210,10 +223,20 @@ class UserModal:
             ui.notify("Password is required for new users.", type="warning")
             return
 
-        # Clean payload
-        payload = self.user_data.copy()
-        if self.user_id and not payload["password"]:
-            payload.pop("password")
+        # Create a true PATCH payload
+        if self.user_id:
+            payload = {}
+            for key, value in self.user_data.items():
+                if value != self.original_user_data.get(key):
+                    payload[key] = value
+            
+            # Handle password separately since it starts empty
+            if self.user_data["password"]:
+                payload["password"] = self.user_data["password"]
+        else:
+            payload = self.user_data.copy()
+            if not payload.get("password"):
+                payload.pop("password", None)
 
         await self.on_save_callback(payload, self.user_id)
         self.dialog.close()

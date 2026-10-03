@@ -6,7 +6,7 @@ def create_sidebar(active_route: str = '/'):
         
         with ui.row().classes('items-center py-6 gap-4 px-2'):
             ui.icon('menu', size='md')
-            ui.label('Menù').classes('text-3xl font-bold')
+            ui.label('Menu').classes('text-3xl font-bold')
             
         def menu_item(icon: str, text: str, route: str):
             # Apply darker background if active, otherwise apply hover effects
@@ -38,4 +38,4 @@ def create_sidebar(active_route: str = '/'):
             ui.navigate.to('/login')
             
         # 3. Add the logout button
-        ui.button('Logout', icon='logout', color='negative', on_click=perform_logout).classes('w-full mb-4')
+        ui.button('Logout', icon='logout', color='negative', on_click=perform_logout).classes('mb-4 self-center')

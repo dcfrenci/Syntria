@@ -89,7 +89,7 @@ class Calendar:
             end_time = dt + timedelta(minutes=duration)
 
             with ui.card().classes(
-                "col-start-1 w-[95%] p-1 shadow-lg cursor-pointer rounded-lg justify-self-center bg-gray-300"
+                "col-start-1 w-[95%] border-1 p-1 shadow-lg cursor-pointer rounded-lg justify-self-center bg-gray-300"
             ).style(
                 f"grid-row: {start_row} / span {row_span}; top: {self.h_row / 2}px;"
             ) as card:
