@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import jwt
@@ -101,13 +101,14 @@ async def login_for_access_token(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-async def get_current_admin_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """Verifies that the authenticated user has the 'Admin' role."""
-    if current_user.role.name.lower() != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Operation not permitted. Admin privileges required.",
-        )
-    return current_user
+class RoleChecker:
+    def __init__(self, allowed_roles: List[str]):
+        self.allowed_roles = [r.lower() for r in allowed_roles]
+
+    async def __call__(self, current_user: User = Depends(get_current_user)) -> User:
+        if current_user.role.name.lower() not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Operation not permitted. Insufficient privileges.",
+            )
+        return current_user

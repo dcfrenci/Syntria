@@ -4,10 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Item, Category
+from app.models import Item, Category, User
 from app.schemas.items import ItemCreate, ItemListResponse, ItemResponse, ItemUpdate
+from app.routers.auth import RoleChecker
 
 router = APIRouter(prefix="/items", tags=["Items"])
+
+
+allow_read = RoleChecker(
+    ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
+)
+allow_write = RoleChecker(["admin", "manager"])
 
 
 # 1. CREATE
@@ -15,24 +22,27 @@ router = APIRouter(prefix="/items", tags=["Items"])
 async def create_item(
     payload: ItemCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_write),
 ):
     cat_exists = None
-    
+
     # Validate category exists if provided
     if payload.category_id is not None:
         cat_exists = await db.get(Category, payload.category_id)
         if not cat_exists:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Category ID {payload.category_id} does not exist."
+                detail=f"Category ID {payload.category_id} does not exist.",
             )
 
     # Check duplicate name
-    existing_item = (await db.execute(select(Item).where(Item.name == payload.name))).scalar_one_or_none()
+    existing_item = (
+        await db.execute(select(Item).where(Item.name == payload.name))
+    ).scalar_one_or_none()
     if existing_item:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"An item with name '{payload.name}' already exists."
+            detail=f"An item with name '{payload.name}' already exists.",
         )
 
     new_item = Item(**payload.model_dump())
@@ -51,6 +61,7 @@ async def get_items(
     category_id: int | None = Query(default=None, description="Filter by Category ID"),
     is_active: bool | None = Query(default=None),
     is_specific: bool | None = Query(default=None),
+    current_user: User = Depends(allow_read),
 ):
     filters = []
     if category_id is not None:
@@ -62,7 +73,7 @@ async def get_items(
 
     count_query = select(func.count(Item.id)).where(*filters)
     total_count = (await db.execute(count_query)).scalar_one()
-    
+
     items_query = (
         select(Item)
         .options(selectinload(Item.category))
@@ -70,11 +81,11 @@ async def get_items(
         .order_by(Item.id)
         .offset(skip)
     )
-    
+
     if limit is not None:
         items_query = items_query.limit(limit)
-    
-    items = (await db.execute(items_query)).scalars().all()        
+
+    items = (await db.execute(items_query)).scalars().all()
 
     return {"total": total_count, "items": items}
 
@@ -85,10 +96,18 @@ async def update_item(
     item_id: int,
     payload: ItemUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_write),
 ):
-    item = (await db.execute(select(Item).options(selectinload(Item.category)).where(Item.id == item_id))).scalar_one_or_none()
+    item = (
+        await db.execute(
+            select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
+        )
+    ).scalar_one_or_none()
     if not item:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Item with id {item_id} not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item with id {item_id} not found.",
+        )
 
     update_data = payload.model_dump(exclude_unset=True)
 
@@ -98,7 +117,7 @@ async def update_item(
         if not cat_exists:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Category ID {update_data['category_id']} does not exist."
+                detail=f"Category ID {update_data['category_id']} does not exist.",
             )
 
     for field, value in update_data.items():
@@ -108,22 +127,24 @@ async def update_item(
     await db.refresh(item)
     return item
 
+
 # 4. READ ONE
 @router.get("/{item_id}", response_model=ItemResponse, status_code=status.HTTP_200_OK)
 async def get_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_read),
 ):
     item = (
         await db.execute(
             select(Item).options(selectinload(Item.category)).where(Item.id == item_id)
         )
     ).scalar_one_or_none()
-    
+
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail=f"Item with id {item_id} not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item with id {item_id} not found.",
         )
 
     return item
@@ -134,16 +155,17 @@ async def get_item(
 async def delete_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_write),
 ):
     item = await db.get(Item, item_id)
-    
+
     if not item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, 
-            detail=f"Item with id {item_id} not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item with id {item_id} not found.",
         )
 
     await db.delete(item)
     await db.flush()
-    
+
     return None

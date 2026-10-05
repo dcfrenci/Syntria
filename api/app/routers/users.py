@@ -8,9 +8,10 @@ from typing import Optional
 from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models import Role, User, Person, Reservation
-from app.routers.auth import get_current_user, get_current_admin_user
+from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.roles import RoleCreate, RoleResponse
 from app.schemas.users import (
+    SystemBootstrap,
     UserCreate,
     UserListResponse,
     UserResponse,
@@ -20,78 +21,56 @@ from app.schemas.reservations import ReservationListResponse
 
 router = APIRouter(prefix="/users", tags=["Users & Staff"])
 
+allow_admin_mgr = RoleChecker(["admin", "manager"])
+allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
+allow_all_staff = RoleChecker(
+    ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
+)
+
+
 # ---------------------------------------------------------
 # Bootstrap Endpoints
 # ---------------------------------------------------------
-@router.post("/bootstrap_user", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def bootstrap_first_admin(
-    payload: UserCreate,
+@router.post("/admin", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def bootstrap_admin(
+    payload: SystemBootstrap,
     db: AsyncSession = Depends(get_db),
 ):
+    """Initializes the system by creating the Admin role, person, and user atomically. Locked after first use."""
     count = (await db.execute(select(func.count(User.id)))).scalar_one()
     if count > 0:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bootstrap already completed.")
-    # ... same creation logic as create_user, minus the current_user dependency
-    
-    # 1. Check if Person exists
-    person = await db.get(Person, payload.person_id)
-    if not person:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Person ID {payload.person_id} not found.",
+            status.HTTP_403_FORBIDDEN, detail="System already initialized."
         )
-    
-    # 2. Check if Person already has a User account
-    user_check = await db.execute(
-        select(User).where(User.person_id == payload.person_id)
+
+    # 1. Create Admin Role
+    role = Role(name=payload.role_name)
+    db.add(role)
+    await db.flush()
+
+    # 2. Create Admin Person
+    person = Person(
+        first_name=payload.first_name,
+        last_name=payload.last_name,
+        email=payload.email,
+        phone_number=payload.phone_number,
+        birth_date=payload.birth_date,
     )
-    if user_check.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A staff user account is already linked to this person.",
-        )
-    
-    # 3. Check if Role exists
-    role = await db.get(Role, payload.role_id)
-    if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Role ID {payload.role_id} not found.",
-        )
-    
-    # 4. Create User with hashed password
+    db.add(person)
+    await db.flush()
+
+    # 3. Create Admin User
     new_user = User(
-        person_id=payload.person_id,
-        role_id=payload.role_id,
+        person_id=person.id,
+        role_id=role.id,
         hashed_password=get_password_hash(payload.password),
-        is_active=payload.is_active,
+        is_active=True,
     )
     db.add(new_user)
     await db.flush()
+
     await db.refresh(new_user, ["person", "role"])
     return new_user
-
-
-@router.post("/bootstrap_role", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
-async def create_role(
-    payload: RoleCreate,
-    db: AsyncSession = Depends(get_db),
-):  
-    count = (await db.execute(select(func.count(Role.id)))).scalar_one()
-    if count > 0:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Bootstrap already completed.")
-    
-    existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Role '{payload.name}' already exists.",
-        )
-
-    role = Role(name=payload.name)
-    db.add(role)
-    await db.flush()
-    return role
 
 
 # ---------------------------------------------------------
@@ -101,7 +80,7 @@ async def create_role(
 async def create_user(
     payload: UserCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(allow_admin_mgr),
 ):
     # 1. Check if Person exists
     person = await db.get(Person, payload.person_id)
@@ -144,7 +123,7 @@ async def create_user(
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def get_my_profile(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(allow_all_staff),
 ):
     """Retrieve details of the currently logged-in staff member."""
     return current_user
@@ -153,11 +132,11 @@ async def get_my_profile(
 @router.get("/", response_model=UserListResponse, status_code=status.HTTP_200_OK)
 async def list_users(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     role_id: int | None = Query(default=None),
     is_active: bool | None = Query(default=None),
+    current_user: User = Depends(allow_admin_mgr_sec),
 ):
     filters = []
     if role_id is not None:
@@ -165,10 +144,7 @@ async def list_users(
     if is_active is not None:
         filters.append(User.is_active == is_active)
 
-    query = (
-        select(User)
-        .options(selectinload(User.person), selectinload(User.role))
-    )
+    query = select(User).options(selectinload(User.person), selectinload(User.role))
     count_query = select(func.count(User.id))
 
     if filters:
@@ -177,10 +153,10 @@ async def list_users(
 
     total = (await db.execute(count_query)).scalar_one()
     users = (
-        await db.execute(
-            query.order_by(User.id).offset(skip).limit(limit)
-        )
-    ).scalars().all()
+        (await db.execute(query.order_by(User.id).offset(skip).limit(limit)))
+        .scalars()
+        .all()
+    )
 
     return {"total": total, "users": users}
 
@@ -189,8 +165,18 @@ async def list_users(
 async def get_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_user),
 ):
+    role = current_user.role.name.lower()
+    if role not in ["admin", "manager", "secretary", "doctor"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
+        )
+    if role == "doctor" and current_user.id != user_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
+        )
+
     user = (
         await db.execute(
             select(User)
@@ -212,7 +198,7 @@ async def update_user(
     user_id: int,
     payload: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(allow_admin_mgr),
 ):
     user = (
         await db.execute(
@@ -255,7 +241,7 @@ async def update_user(
 async def delete_user(
     user_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(RoleChecker(["admin"])),
 ):
     user = await db.get(User, user_id)
     if not user:
@@ -269,19 +255,30 @@ async def delete_user(
 
 
 @router.get("/{user_id}/reservations", response_model=ReservationListResponse)
-async def get_user_reservations(  # Changed to async def
+async def get_user_reservations(
     user_id: int,
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Retrieve reservations assigned to a specific staff member/doctor."""
-    
+
+    role = current_user.role.name.lower()
+    if role not in ["admin", "manager", "secretary", "doctor"]:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
+        )
+    if role == "doctor" and current_user.id != user_id:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
+        )
+
     # 1. Verify user exists using async syntax
     user_stmt = select(User).where(User.id == user_id)
     result = await db.execute(user_stmt)
     user = result.scalars().first()
-    
+
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -295,10 +292,10 @@ async def get_user_reservations(  # Changed to async def
 
     # 3. Build and execute the async query
     query = select(Reservation).where(Reservation.staff.any(id=user_id))
-    
+
     # Filter >= start at midnight
     query = query.where(Reservation.reservation_date >= active_start)
-    
+
     # Filter < the day AFTER the end date
     query = query.where(Reservation.reservation_date < active_end + timedelta(days=1))
 

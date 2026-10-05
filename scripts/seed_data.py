@@ -8,7 +8,7 @@ def get_roles():
         {"name": "Secretary"},
         {"name": "Doctor"},
         {"name": "Assistant"},
-        {"name": "Emploee"},
+        {"name": "Employee"},
         {"name": "Client"},
     ]
 
@@ -368,6 +368,7 @@ def get_persons(rem_map: dict):
 
 def get_users(roles_map: dict, p_map: dict):
     return [
+        # --- ACTIVE USERS ---
         {
             "person_id": p_map["Matteo Bergamaschi"],
             "role_id": roles_map["Manager"],
@@ -387,14 +388,8 @@ def get_users(roles_map: dict, p_map: dict):
             "password": "rT2#yN9b",
         },
         {
-            "person_id": p_map["Sofia Ricci"],
-            "role_id": roles_map["Doctor"],
-            "is_active": False,
-            "password": "wE8!qF3m",
-        },
-        {
             "person_id": p_map["Alessandro Romano"],
-            "role_id": roles_map["Emploee"],
+            "role_id": roles_map["Employee"],
             "is_active": True,
             "password": "bV5&cH1k",
         },
@@ -403,12 +398,6 @@ def get_users(roles_map: dict, p_map: dict):
             "role_id": roles_map["Client"],
             "is_active": True,
             "password": "xN7*jP4d",
-        },
-        {
-            "person_id": p_map["Lorenzo Ferrari"],
-            "role_id": roles_map["Secretary"],
-            "is_active": False,
-            "password": "gZ3%tR8s",
         },
         {
             "person_id": p_map["Chiara Esposito"],
@@ -427,6 +416,43 @@ def get_users(roles_map: dict, p_map: dict):
             "role_id": roles_map["Client"],
             "is_active": True,
             "password": "vC9@hJ7L",
+        },
+        # --- INACTIVE USERS ---
+        {
+            "person_id": p_map["Francesco Della Casa"],
+            "role_id": roles_map["Manager"],
+            "is_active": False,
+            "password": "testPass1!",
+        },
+        {
+            "person_id": p_map["Lorenzo Ferrari"],
+            "role_id": roles_map["Secretary"],
+            "is_active": False,
+            "password": "gZ3%tR8s",
+        },
+        {
+            "person_id": p_map["Sofia Ricci"],
+            "role_id": roles_map["Doctor"],
+            "is_active": False,
+            "password": "wE8!qF3m",
+        },
+        {
+            "person_id": p_map["Antonietta Della Bella"],
+            "role_id": roles_map["Assistant"],
+            "is_active": False,
+            "password": "testPass1!",
+        },
+        {
+            "person_id": p_map["Giuseppe Gallo"],
+            "role_id": roles_map["Employee"],
+            "is_active": False,
+            "password": "testPass1!",
+        },
+        {
+            "person_id": p_map["Elena Costa"],
+            "role_id": roles_map["Client"],
+            "is_active": False,
+            "password": "testPass1!",
         },
     ]
 

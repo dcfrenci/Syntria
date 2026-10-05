@@ -40,45 +40,27 @@ def post_data(endpoint: str, data: list, token: str):
 
 
 def bootstrap_system():
-    """Bootstraps the admin role, admin person, and admin user."""
+    """Bootstraps the admin role, admin person, and admin user in a single request."""
     print("--- Bootstrapping System ---")
 
-    # 1. Bootstrap Role
-    role_payload = {"name": "Admin"}
-    role_response = requests.post(f"{BASE_URL}/users/bootstrap_role", json=role_payload)
-    print(f"Bootstrap Role Status: {role_response.status_code}")
-
-    role_id = 1
-    if role_response.status_code in [200, 201]:
-        role_id = role_response.json().get("id", 1)
-
-    # 2. Create Admin Person (Trailing slash added to avoid 307 redirect)
-    person_payload = {
+    payload = {
+        "role_name": "Admin",
         "first_name": "Admin",
         "last_name": "System",
         "email": "admin@email.com",
         "phone_number": "0000000000",
         "birth_date": "0001-01-01",
+        "password": "asTf82#1"
     }
-    person_response = requests.post(f"{BASE_URL}/persons/", json=person_payload)
-    print(f"Create Admin Person Status: {person_response.status_code}")
 
-    person_id = 1
-    if person_response.status_code in [200, 201]:
-        person_id = person_response.json().get("id", 1)
-
-    # 3. Bootstrap Admin User
-    admin_credentials = {
-        "email": "admin@email.com",
-        "password": "asTf82#1",
-        "person_id": person_id,
-        "role_id": role_id,
-        "is_active": True,
-    }
-    user_response = requests.post(
-        f"{BASE_URL}/users/bootstrap_user", json=admin_credentials
-    )
-    print(f"Bootstrap User Status: {user_response.status_code}")
+    response = requests.post(f"{BASE_URL}/users/admin", json=payload)
+    print(f"Bootstrap System Status: {response.status_code}")
+    
+    if response.status_code not in [200, 201, 403]:
+        print(f"Error: {response.text}")
+    elif response.status_code == 403:
+        print("System already bootstrapped. Proceeding...")
+    
     print("----------------------------\n")
 
 

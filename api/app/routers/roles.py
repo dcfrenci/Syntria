@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models import Role, User
-from app.routers.auth import get_current_user, get_current_admin_user
+from app.routers.auth import RoleChecker
 from app.schemas.roles import (
     RoleCreate,
     RoleResponse,
@@ -12,10 +12,14 @@ from app.schemas.roles import (
 
 router = APIRouter(prefix="/roles", tags=["Roles"])
 
+allow_admin_mgr = RoleChecker(["admin", "manager"])
+allow_admin = RoleChecker(["admin"])
+
+
 @router.get("/", response_model=list[RoleResponse])
 async def list_roles(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(allow_admin_mgr),
 ):
     result = await db.execute(select(Role).order_by(Role.name))
     return result.scalars().all()
@@ -25,7 +29,7 @@ async def list_roles(
 async def create_role(
     payload: RoleCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(allow_admin),
 ):
     existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))
     if existing.scalar_one_or_none():

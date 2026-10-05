@@ -88,18 +88,23 @@ The data that will be loaded using this script are divided into two paragraph ba
 
 
 ### Users
-| Person ID            | Role ID   | Active | Password |
-| -------------------- | --------- | ------ | -------- |
-| (Matteo Bergamaschi) | manager   | True   | kL9$zQ2w |
-| (Giulia Rossi)       | assistant | True   | pM4@vX7c |
-| (Marco Bianchi)      | doctor    | True   | rT2#yN9b |
-| (Sofia Ricci)        | doctor    | False  | wE8!qF3m |
-| (Alessandro Romano)  | employ    | True   | bV5&cH1k |
-| (Martina Colombo)    | client    | True   | xN7*jP4d |
-| (Lorenzo Ferrari)    | secretary | False  | gZ3%tR8s |
-| (Chiara Esposito)    | client    | True   | mK6^bV2n |
-| (Davide Marino)      | client    | True   | qW1$fD5x |
-| (Sara Russo)         | client    | True   | vC9@hJ7L |
+| Person ID                | Email                   | Role ID   | Active | Password   |
+| ------------------------ | ----------------------- | --------- | ------ | ---------- |
+| (Admin System)           | admin@email.com         | admin     | True   | asTf82#1   |
+| (Matteo Bergamaschi)     | matteo.b@gmail.com      | manager   | True   | kL9$zQ2w   |
+| (Giulia Rossi)           | giulia.rossi@email.com  | assistant | True   | pM4@vX7c   |
+| (Marco Bianchi)          | mbianchi88@yahoo.it     | doctor    | True   | rT2#yN9b   |
+| (Alessandro Romano)      | alex.romano@email.com   | employee  | True   | bV5&cH1k   |
+| (Martina Colombo)        | marty.colombo@gmail.com | client    | True   | xN7*jP4d   |
+| (Chiara Esposito)        | chiara.e@yahoo.it       | client    | True   | mK6^bV2n   |
+| (Davide Marino)          | davide.marino@gmail.com | client    | True   | qW1$fD5x   |
+| (Sara Russo)             | sara.russo@email.com    | client    | True   | vC9@hJ7L   |
+| (Francesco Della Casa)   | francesco@gmai.com      | manager   | False  | testPass1! |
+| (Lorenzo Ferrari)        | lorenzo.f@email.com     | secretary | False  | gZ3%tR8s   |
+| (Sofia Ricci)            | s.ricci@gmail.com       | doctor    | False  | wE8!qF3m   |
+| (Antonietta Della Bella) | antonella@email.com     | assistant | False  | testPass1! |
+| (Giuseppe Gallo)         | ggallo@yahoo.it         | employee  | False  | testPass1! |
+| (Elena Costa)            | elena.costa@gmail.com   | client    | False  | testPass1! |
 
 
 ### Reservations
