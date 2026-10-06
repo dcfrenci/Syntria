@@ -20,9 +20,10 @@
   - [1. Environment Setup](#1-environment-setup)
   - [2. Start Services](#2-start-services)
   - [3. Database Initialization](#3-database-initialization)
-- [🌐 Networking \& Access (Tailscale)](#-networking--access-tailscale)
+- [🌐 Networking \& Access](#-networking--access)
 - [🧪 Testing](#-testing)
 
+---
 
 ## 📖 Abstract
 Syntria provides a robust backend API and an intuitive graphical interface for role-based staff access, agenda management, billing, and highly customizable quote document generation.
@@ -107,16 +108,16 @@ python3 scripts/initialize.py --default
 
 ---
 
-## 🌐 Networking & Access (Tailscale)
-Syntria utilizes Tailscale to securely route traffic. Run the following commands from your host machine to configure public and private access:
+## 🌐 Networking & Access
+Syntria utilizes **Tailscale** to securely route traffic. Run the following commands from your host machine to configure public and private access:
 
-**Enable the Public Frontend (Funnel):**
+**1. Enable the Public Frontend (Funnel):**
 Map the public HTTPS port 443 to Nginx's public listener on port 80.
 ```bash
 docker exec tailscale_gateway tailscale funnel --bg --https=443 http://nginx:80
 ```
 
-**Enable the Private Backend (Serve):**
+**2. Enable the Private Backend (Serve):**
 Map the private Tailnet HTTPS port 8443 to Nginx's private listener on port 81.
 ```bash
 docker exec tailscale_gateway tailscale serve --bg --https=8443 http://nginx:81
