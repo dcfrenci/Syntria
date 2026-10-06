@@ -1,18 +1,18 @@
 services:
   db:
-    image: postgres:16-alpine
-    container_name: postgres
+    image: ${POSTGRES_IMAGE}
+    container_name: ${POSTGRES_CONTAINER_NAME}
     restart: always
+    env_file:
+      - .env
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      PGPORT: ${POSTGRES_PORT}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} -p ${POSTGRES_PORT}"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -20,15 +20,16 @@ services:
       - syntria
 
   db-web:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    image: ${PGADMIN_IMAGE}
+    container_name: ${PGADMIN_CONTAINER_NAME}
+    restart: always
+    env_file:
+      - .env
     ports:
-      - "5050:80"
+      - "${PGADMIN_PORT}:${PGADMIN_LISTEN_PORT}"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - syntria
 
@@ -36,18 +37,20 @@ services:
     build:
       context: ./api
       dockerfile: Dockerfile
-    container_name: fastapi
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: ${FASTAPI_CONTAINER_NAME}
     restart: always
     env_file:
       - .env
-    #TODO remove the following line (just for development) and volumes ? 
-    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # TODO Remove - Dev reload override (comment out in production to fall back to Dockerfile CMD)
+    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $${FASTAPI_PORT} --reload"]
     volumes:
       - ./api/app:/app/app
     ports:
-      - "8000:8000"
+      - "${FASTAPI_PORT}:${FASTAPI_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${FASTAPI_PORT}/health')\""]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -62,24 +65,66 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: nicegui
+      args:
+        PYTHON_VERSION: ${PYTHON_VERSION}
+    container_name: ${NICEGUI_CONTAINER_NAME}
     restart: always
     env_file:
       - .env
-    # TODO remove command and volumes
-    command: ["python", "app/main.py"]
     volumes:
       - ./frontend:/app
     ports:
-      - "8080:8080"
+      - "${NICEGUI_PORT}:${NICEGUI_PORT}"
     depends_on:
       api:
         condition: service_healthy
     networks:
       - syntria
 
+  nginx:
+    image: ${NGINX_IMAGE}
+    container_name: ${NGINX_CONTAINER_NAME}
+    restart: always
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - api
+      - db-web
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --spider http://localhost:80/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    networks:
+      - syntria
+
+  tailscale:
+    image: ${TAILSCALE_IMAGE}
+    container_name: ${TAILSCALE_CONTAINER_NAME}
+    hostname: ${TAILSCALE_HOSTNAME}
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+    volumes:
+      - tailscale_data:/var/lib/tailscale
+    cap_add:
+      - net_admin
+      - net_raw
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --peers=false || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - syntria
+
 volumes:
   postgres_data:
+    driver: local
+  tailscale_data:
     driver: local
 
 networks:

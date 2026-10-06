@@ -1,8 +1,9 @@
-FROM python:3.12-slim
+ARG PYTHON_VERSION=3.12-slim
+FROM python:${PYTHON_VERSION}
 
-# Prevent Python from writing .pyc files and enable unbuffered logging
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    FASTAPI_PORT=8000
 
 WORKDIR /app
 
@@ -14,6 +15,6 @@ COPY ./app ./app
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8000
+EXPOSE ${FASTAPI_PORT}
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${FASTAPI_PORT} --proxy-headers"]
