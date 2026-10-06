@@ -1,6 +1,7 @@
+import os
 import requests
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 
 def auth():

@@ -1,3 +1,4 @@
+import os
 import base64
 import json
 import time
@@ -129,4 +130,4 @@ def settings_route():
         settings_page()
 
 # Initialize the UI server
-ui.run(title="Syntria", storage_secret='your_secure_random_secrets', port=8080, host="0.0.0.0", reload=True)
+ui.run(title="Syntria", storage_secret='your_secure_random_secrets', port=int(os.getenv("NICEGUI_PORT", 8080)), host="0.0.0.0", reload=True)

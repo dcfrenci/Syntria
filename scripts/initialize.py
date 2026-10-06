@@ -1,3 +1,4 @@
+import os
 import argparse
 import requests
 from seed_data import (
@@ -12,7 +13,7 @@ from seed_data import (
     get_presets,
 )
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 
 def post_data(endpoint: str, data: list, token: str):

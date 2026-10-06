@@ -3,7 +3,7 @@ import httpx
 from nicegui import app, ui
 from api_client.base import APIClient
 
-API_BASE_URL = os.getenv("API_BASE_URL", "http://api:8000/api/v1")
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 class DataClient(APIClient):
     """Manages communication with the backend Import/Export endpoints."""
@@ -26,7 +26,6 @@ class DataClient(APIClient):
             
             if data:
                 current_batch = []
-                # Unwrap paginated response schemas (e.g., {"total": 10, "items": [...]})
                 if isinstance(data, dict):
                     for key, val in data.items():
                         if isinstance(val, list):
@@ -55,7 +54,7 @@ class DataClient(APIClient):
         # Using httpx directly because APIClient expects JSON responses, not raw CSV files
         async with httpx.AsyncClient() as client:
             res = await client.post(
-                f"{API_BASE_URL}/import_export/export/{entity}",
+                f"{BASE_URL}/import_export/export/{entity}",
                 json={"ids": ids},
                 headers=cls._get_headers()
             )
@@ -72,7 +71,7 @@ class DataClient(APIClient):
         async with httpx.AsyncClient() as client:
             files = {"file": ("upload.csv", file_bytes, "text/csv")}
             res = await client.post(
-                f"{API_BASE_URL}/import_export/validate/{entity}",
+                f"{BASE_URL}/import_export/validate/{entity}",
                 files=files,
                 headers=cls._get_headers()
             )

@@ -1,8 +1,8 @@
+import os
 import httpx
 from nicegui import app
 
-# In Docker, your FastAPI backend container is accessible via http://api:8000
-BASE_URL = "http://api:8000/api/v1"
+BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 class APIClient:
     """Centralized HTTP client for communicating with the FastAPI backend."""
