@@ -134,3 +134,4 @@ python3 scripts/initialize.py
 python3 scripts/role_testing.py
 docker compose down -v
 ```
+>⚠️ **Important**: Because the final command (docker compose down -v) completely destroys the containers and their local volumes, you will need to re-run the commands in the Networking & Access (Tailscale) section when you bring the stack back online for regular use.
