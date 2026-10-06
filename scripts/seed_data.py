@@ -376,6 +376,12 @@ def get_users(roles_map: dict, p_map: dict):
             "password": "kL9$zQ2w",
         },
         {
+            "person_id": p_map["Valentina Bruno"],
+            "role_id": roles_map["Secretary"],
+            "is_active": True,
+            "password": "sJ8*kP2m",
+        },
+        {
             "person_id": p_map["Giulia Rossi"],
             "role_id": roles_map["Assistant"],
             "is_active": True,

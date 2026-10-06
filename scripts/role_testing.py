@@ -8,6 +8,7 @@ TEST_USERS = [
     # Active Users
     {"role": "Admin", "email": "admin@email.com", "password": "asTf82#1", "active": True},
     {"role": "Manager", "email": "matteo.b@gmail.com", "password": "kL9$zQ2w", "active": True},
+    {"role": "Secretary", "email": "vale.bruno@email.com", "password": "sJ8*kP2m", "active": True},
     {"role": "Doctor", "email": "mbianchi88@yahoo.it", "password": "rT2#yN9b", "active": True},
     {"role": "Assistant", "email": "giulia.rossi@email.com", "password": "pM4@vX7c", "active": True},
     {"role": "Employee", "email": "alex.romano@email.com", "password": "bV5&cH1k", "active": True},
