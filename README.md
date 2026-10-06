@@ -8,28 +8,26 @@
   <em>A comprehensive, full-stack dental clinic management platform designed to streamline daily operations, patient relationships, and clinical administration.</em>
 </div>
 
-
-
-
 ---
-#### Table of content
 
+## Table of content
+
+- [Table of content](#table-of-content)
 - [📖 Abstract](#-abstract)
 - [🏗️ Architecture \& Containerized Services](#️-architecture--containerized-services)
-- [✨ Key Features](#-key-features)
+- [🔑 Key Features](#-key-features)
 - [🚀 Deployment \& Installation](#-deployment--installation)
   - [1. Environment Setup](#1-environment-setup)
   - [2. Start Services](#2-start-services)
   - [3. Database Initialization](#3-database-initialization)
 - [🌐 Networking \& Access (Tailscale)](#-networking--access-tailscale)
 - [🧪 Testing](#-testing)
-- [Testing](#testing)
-- [Deployment](#deployment)
 
 
 ## 📖 Abstract
 Syntria provides a robust backend API and an intuitive graphical interface for role-based staff access, agenda management, billing, and highly customizable quote document generation.
 
+---
 
 ## 🏗️ Architecture & Containerized Services
 Syntria is orchestrated via Docker Compose within an isolated custom bridge network (`syntria`). The architecture implements a strict dependency graph utilizing health checks to ensure reliable service initialization and failover.
@@ -64,15 +62,16 @@ Syntria is orchestrated via Docker Compose within an isolated custom bridge netw
   * **Technical Details:** Configured with elevated network capabilities (`net_admin`, `net_raw`) and a persistent local volume (`tailscale_data`) for identity state management. Authenticates via the injected `TS_AUTHKEY`.
   * **Advantages:** Seamlessly bridges the local Docker network to a private WireGuard-based Tailnet. It allows for the secure, credential-based exposure of internal web interfaces without the need to open vulnerable public firewall ports.
 
+---
 
-## ✨ Key Features
-* **🔐 Role-Based Access Control (RBAC):** Strict permission boundaries across 7 distinct roles (Admin, Manager, Secretary, Doctor, Assistant, Employee, Client) to secure sensitive endpoints and UI pages.
-* **📅 Agenda & Appointments:** Visual calendar scheduling with double-booking prevention, date-range filtering, and specific staff/doctor assignment.
-* **👥 Patient CRM:** Track patient information, contact details, and automated reminder preferences (SMS, WhatsApp, Telegram).
-* **📋 Pricing & Services Catalog:** Centralized management of clinic treatments, categorized by dental specialty (Orthodontics, Endodontics, Surgery, etc.), with flags for tooth-specific services.
-* **💰 Interactive Quoting System:** Create detailed financial quotes with specific tooth selection, quantity adjustments, and custom discounts.
-* **📄 Drag & Drop Document Presets:** A visual builder for creating quote document templates with customizable margins, dynamic text variables, signatures, and images.
-* **🔄 Data Portability:** Robust bulk import, validation, and export tools for Quotes, Items, Reservations, and Presets via CSV.
+## 🔑 Key Features
+* **🔐 Role-Based Access Control (RBAC):** Implements stateless JWT authentication with role claims embedded directly in the token payload. Backend routes are secured via FastAPI dependency injection (`Depends(RoleChecker(...))`), enforcing strict HTTP 403 authorization boundaries across 7 hierarchical roles. NiceGUI middleware mirrors this on the frontend to dynamically mount or restrict UI routes.
+* **📅 Agenda & Appointments:** Timezone-aware scheduling engine utilizing asynchronous SQLAlchemy queries for precise overlap detection (`start_time < res_end and end_time > res.reservation_date`). The reactive frontend leverages Python-driven DOM updates for calendar rendering, allowing seamless date-range filtering and staff pivoting without full page reloads.
+* **👥 Patient CRM:** Normalized relational entity management leveraging SQLAlchemy ORM. Enforces strict Pydantic schema validation for contact data and utilizes foreign key constraints to reliably map patients to their selected reminder infrastructure (SMS, WhatsApp, Telegram).
+* **📋 Pricing & Services Catalog:** Centralized master data management for clinical treatments. Ensures absolute financial precision using PostgreSQL `Numeric(10, 2)` column types. Implements `Boolean` database flags (`is_specific`) to programmatically trigger conditional UI logic, such as rendering the interactive tooth-selection matrix.
+* **💰 Interactive Quoting System:** Stateful quoting engine that executes multi-table atomic transactions with automatic rollbacks. It handles deep relational payloads, serializing integer arrays for tooth mapping into `JSON` columns, executing server-side subtotal and discount arithmetic, and leveraging `selectinload` for highly optimized eager-loading of the complete quote graph.
+* **📄 Drag & Drop Document Presets:** A reactive visual DOM builder calculating absolute X/Y coordinates, spatial boundaries, and viewport scaling in real-time. Template configurations—including font states, bounding boxes, and Base64-encoded image payloads—are serialized and persisted directly into PostgreSQL `JSON` columns for dynamic document generation.
+* **🔄 Data Portability:** High-performance ETL pipeline utilizing the `pandas` library for in-memory CSV parsing and generation. It features deep-nested JSON serialization to flatten relational database objects for export, and implements a multi-pass validation layer during imports to prevent primary key conflicts and orphaned foreign key relations before executing atomic bulk commits.
 
 ---
 
