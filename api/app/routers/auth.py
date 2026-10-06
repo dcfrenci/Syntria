@@ -95,6 +95,8 @@ async def login_for_access_token(
         "sub": str(user.id),
         "email": user.person.email,
         "role": user.role.name,
+        "first_name": user.person.first_name,
+        "last_name": user.person.last_name,
     }
     access_token = create_access_token(data=token_data)
 

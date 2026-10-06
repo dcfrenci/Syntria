@@ -1,3 +1,5 @@
+import json
+import base64
 from nicegui import app, ui
 from api_client.auth import authenticate
 
@@ -15,9 +17,22 @@ def login_page():
             result = await authenticate(username_input.value, password_input.value)
             if result:
                 app.storage.user['authenticated'] = True
-                app.storage.user['token'] = result.get('access_token')
+                token = result.get('access_token')
+                app.storage.user['token'] = token
+                
+                # Decode the JWT payload to store user info in the session
+                try:
+                    payload_part = token.split('.')[1]
+                    padded = payload_part + '=' * (-len(payload_part) % 4)
+                    payload = json.loads(base64.urlsafe_b64decode(padded))
+                    
+                    app.storage.user['name'] = f"{payload.get('first_name', '')} {payload.get('last_name', '')}".strip()
+                    app.storage.user['role'] = payload.get('role', 'Unknown').capitalize()
+                except Exception:
+                    app.storage.user['name'] = "User"
+                    app.storage.user['role'] = "Role"
+
                 ui.navigate.to('/home')
             else:
                 ui.notify('Invalid username or password', color='negative')
-
         ui.button('Sign In', on_click=try_login).classes('w-full mt-4')

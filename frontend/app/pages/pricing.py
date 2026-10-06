@@ -1,10 +1,13 @@
-from nicegui import ui
+from nicegui import app, ui
 from api_client.services import ServicesClient
 from components.modals import service_modal, category_modal, confirmation_modal
 from components.style import Style
 
+
 async def pricing_page():
     """Renders the Pricing & Services management view."""
+
+    user_role = app.storage.user.get("role", "").lower()
 
     with ui.column().classes("w-full"):
 
@@ -52,7 +55,7 @@ async def pricing_page():
             else:
                 await ServicesClient.update_item(item_id=id, data=item)
             await refresh_items()
-            
+
         async def new_service():
             modal = await service_modal(
                 title="New Service", on_save_callback=save_service
@@ -98,7 +101,7 @@ async def pricing_page():
             else:
                 await ServicesClient.update_category(category_id=id, data=category)
             await refresh_categories()
-            
+
         async def new_category():
             modal = await category_modal(
                 title="New Category", on_save_callback=save_category
@@ -177,10 +180,11 @@ async def pricing_page():
             on_save_callback=delete_service,
         )
 
-        with ui.row().classes(Style.row_end()):
-            ui.button("New", icon="r_add", on_click=new_service)
-            ui.button("Edit", icon="r_edit", on_click=edit_service)
-            ui.button("Delete", icon="r_delete", on_click=delete_service_diag.open)
+        if user_role in ["admin", "manager"]:
+            with ui.row().classes(Style.row_end()):
+                ui.button("New", icon="r_add", on_click=new_service)
+                ui.button("Edit", icon="r_edit", on_click=edit_service)
+                ui.button("Delete", icon="r_delete", on_click=delete_service_diag.open)
 
         ui.label("Categories").classes(Style.h2())
 
@@ -213,8 +217,8 @@ async def pricing_page():
             description="Are you sure you want to permanently delete this category and all its details?",
             on_save_callback=delete_category,
         )
-
-        with ui.row().classes(Style.row_end()):
-            ui.button("New", icon="r_add", on_click=new_category)
-            ui.button("Edit", icon="r_edit", on_click=edit_category)
-            ui.button("Delete", icon="r_delete", on_click=delete_category_diag.open)
+        if user_role in ["admin", "manager"]:
+            with ui.row().classes(Style.row_end()):
+                ui.button("New", icon="r_add", on_click=new_category)
+                ui.button("Edit", icon="r_edit", on_click=edit_category)
+                ui.button("Delete", icon="r_delete", on_click=delete_category_diag.open)

@@ -75,7 +75,7 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Doctor**    |     :white_check_mark:*     |     :white_check_mark:*      |       :white_check_mark:*       |        :white_check_mark:*        |                                    |
 | **Assistant** |     :white_check_mark:*     |                              |       :white_check_mark:*       |                                   |                                    |
 | **Employee**  |                             |                              |                                 |                                   |                                    |
-| **Client**    |     :white_check_mark:*     |      :white_check_mark:      |       :white_check_mark:*       |                                   |                                    |
+| **Client**    |     :white_check_mark:*     |                              |       :white_check_mark:*       |                                   |                                    |
 
 ---
 
@@ -88,7 +88,7 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Secretary** |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
 | **Doctor**    |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
 | **Assistant** |  :white_check_mark:   |                        |    :white_check_mark:     |                             |                              |
-| **Employee**  |                       |                        |                           |                             |                              |
+| **Employee**  |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
 | **Client**    |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
 
 ---
@@ -160,3 +160,15 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Assistant** |                                              |                                                |                                              |
 | **Employee**  |                                              |                                                |                                              |
 | **Client**    |                                              |                                                |                                              |
+
+
+# NiceGUI Page Access
+| Role          |        Home        |       Agenda       |      Persons       |      Pricing       |  Customize Quote   |      Setting       |      Account       |
+| :------------ | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: |
+| **Admin**     | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |
+| **Manager**   | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |
+| **Secretary** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |                    |
+| **Doctor**    | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |                    |
+| **Assistant** | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |                    |                    |
+| **Employee**  |                    |                    |                    | :white_check_mark: |                    |                    |                    |
+| **Client**    | :white_check_mark: | :white_check_mark: |                    |                    |                    |                    | :white_check_mark: |

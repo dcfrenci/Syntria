@@ -1,4 +1,4 @@
-from nicegui import ui
+from nicegui import app, ui
 import datetime
 from api_client.agenda import AgendaClient
 from api_client.persons import PersonsClient
@@ -130,6 +130,8 @@ async def edit_reservation(reservation_id: int):
 
 
 async def agenda_page():
+    user_role = app.storage.user.get("role", "").lower()
+
     all_users = await UsersClient.get_users()
     doctors = {
         u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
@@ -147,9 +149,10 @@ async def agenda_page():
             if e.value:
                 await my_agenda.set_doctor(doctor_id=e.value)
 
-        ui.select(
-            label="Select doctor", options=doctors, on_change=update_agenda
-        ).classes(f"max-w-1/3 {Style.p()}")
+        if user_role in ["admin", "manager", "secretary", "doctor"]:
+            ui.select(
+                label="Select doctor", options=doctors, on_change=update_agenda
+            ).classes(f"max-w-1/3 {Style.p()}")
 
     with ui.column().classes("w-full"):
         my_agenda.date_navigator()
@@ -165,4 +168,5 @@ async def agenda_page():
     # Floating buttons
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
         # ui.button(icon="notifications_none")
-        ui.button("New", icon="add", on_click=new_reservation)
+        if user_role in ["admin", "manager", "secretary", "doctor"]:
+            ui.button("New", icon="add", on_click=new_reservation)

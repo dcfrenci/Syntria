@@ -111,10 +111,10 @@ async def get_quotes(
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
-    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "client"]:
+    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
-    if role == "client":
+    if role in ["employee", "client"]:
         patient_id = current_user.person_id
 
     query = select(Quote).order_by(Quote.created_at.desc())
@@ -137,7 +137,7 @@ async def get_quote(
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
-    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "client"]:
+    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
     quote = await db.get(Quote, quote_id)
@@ -146,7 +146,7 @@ async def get_quote(
             status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found."
         )
 
-    if role == "client" and quote.patient_id != current_user.person_id:
+    if role in ["employee", "client"] and quote.patient_id != current_user.person_id:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )

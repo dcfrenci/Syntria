@@ -26,7 +26,7 @@ async def create_reservation(
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
-    if role not in ["admin", "manager", "secretary", "doctor", "client"]:
+    if role not in ["admin", "manager", "secretary", "doctor"]:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
@@ -35,12 +35,6 @@ async def create_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Self-only access permitted. Must be assigned as staff.",
-        )
-
-    if role == "client" and current_user.person_id != payload.patient_id:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN,
-            detail="Self-only access permitted. Can only book for yourself.",
         )
 
     # 1. Calculate time windows for overlap checking

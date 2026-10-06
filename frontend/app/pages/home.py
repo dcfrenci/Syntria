@@ -2,7 +2,7 @@ from datetime import datetime
 import traceback
 
 
-from nicegui import ui
+from nicegui import app, ui
 from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
@@ -29,6 +29,8 @@ def home_page():
 
 async def quotes():
     quote_preview_modal = QuotePreviewModal()
+    
+    user_role = app.storage.user.get('role', '').lower()
 
     with ui.column().classes("w-full"):
         ui.label("Quote").classes(Style.title())
@@ -147,12 +149,13 @@ async def quotes():
         table_quotes.bind_filter_from(search_input, "value")
 
         with ui.row().classes(Style.row_end()):
-            ui.button(
-                "New",
-                icon="r_add",
-                on_click=lambda: ui.navigate.to("/home/quote_create"),
-            )
-            ui.button("Edit", icon="r_edit", on_click=edit)
+            if user_role in ["admin", "manager", "secretary", "doctor"]:
+                ui.button(
+                    "New",
+                    icon="r_add",
+                    on_click=lambda: ui.navigate.to("/home/quote_create"),
+                )
+                ui.button("Edit", icon="r_edit", on_click=edit)
             ui.button(
                 "Preview",
                 icon="visibility",
@@ -161,12 +164,13 @@ async def quotes():
             ui.button(
                 "Print", icon="r_print", on_click=lambda: handle_quote_action("print")
             )
-            ui.button(
-                "Download",
-                icon="r_download",
-                on_click=lambda: handle_quote_action("download"),
-            )
-            ui.button("Delete", icon="r_delete", on_click=delete)
+            if user_role in ["admin", "manager", "secretary", "doctor"]:
+                ui.button(
+                    "Download",
+                    icon="r_download",
+                    on_click=lambda: handle_quote_action("download"),
+                )
+                ui.button("Delete", icon="r_delete", on_click=delete)
 
 
 async def quote_detail(
