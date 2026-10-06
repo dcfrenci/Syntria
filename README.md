@@ -79,10 +79,11 @@ Syntria is orchestrated via Docker Compose within an isolated custom bridge netw
 ## 🚀 Deployment & Installation
 
 ### 1. Environment Setup
-Create your environment with:
+Create your environment and install the `requirements.txt`:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+pip install scripts/requirements.txt
 ```
 Create your enviroment file by copying the provided example and adding your Tailscale Auth Key:
 ```bash

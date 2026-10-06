@@ -154,9 +154,9 @@ def create_presets(token: str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Database initialization script.")
     parser.add_argument(
-        "--admin-only",
+        "--pre-filled",
         action="store_true",
-        help="Only bootstrap the admin role, person, and user. Skips the rest of the database prefill.",
+        help="Pre-fill the database with person, users, services and categories.",
     )
     args = parser.parse_args()
 
@@ -165,20 +165,19 @@ if __name__ == "__main__":
     # 1. Bootstrap the core admin dependencies
     bootstrap_system()
 
-    if args.admin_only:
-        print("Admin-only flag provided. Skipping prefill data.")
-    else:
-        # 2. Authenticate to get the token
-        token = auth()
+    # 2. Authenticate to get the token
+    token = auth()
 
-        if token:
-            rem_map = create_reminders(token)
-            roles_map = create_roles(token)
-            p_map = create_persons(token, rem_map)
+    if token:
+        rem_map = create_reminders(token)
+        roles_map = create_roles(token)
             
+        if args.pre_filled:
+            p_map = create_persons(token, rem_map)
+                
             # The mapping above ensures the following functions won't throw KeyErrors
             users_ids = create_users(token, roles_map, p_map)
-            
+                
             c_map = create_categories(token)
             i_map = create_items(token, c_map)
 
@@ -186,6 +185,8 @@ if __name__ == "__main__":
             quotes_ids = create_quotes(token, p_map, i_map)
             reservations_ids = create_reservations(token, p_map)
 
-            print("Database population complete.")
+            print("Prefill database population complete.")
         else:
-            print("Aborting database population due to authentication failure.")
+            print("Database population complete.")
+    else:
+        print("Aborting database population due to authentication failure.")
