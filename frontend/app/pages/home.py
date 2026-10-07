@@ -86,9 +86,8 @@ async def quotes():
 
             try:
                 quote_data = await QuotesClient.get_quote_with_id(quote_id)
-                presets = await PresetsClient.get_presets()
-                active_preset = next((p for p in presets if p.get("is_active")), None)
-
+                active_preset = await PresetsClient.get_active_preset()
+                
                 if not active_preset:
                     ui.notify(
                         "No active preset found. Please activate one in Presets.",
@@ -170,6 +169,7 @@ async def quotes():
                     icon="r_download",
                     on_click=lambda: handle_quote_action("download"),
                 )
+            if user_role in ["admin", "manager"]:
                 ui.button("Delete", icon="r_delete", on_click=delete)
 
 
@@ -191,11 +191,14 @@ async def quote_detail(
         ui.label(title).classes(Style.title())
 
         persons = {p["id"]: p for p in await PersonsClient.get_persons()}
-
+        users = await UsersClient.get_users()
+        if len(users) == 0:
+            users = await UsersClient.get_user_me()
+        
         doctor_person_ids = {
             u["person"]["id"]
-            for u in await UsersClient.get_users()
-            if u.get("role", {}).get("name", "").lower() == "doctor"
+            for u in users
+            if u.get("role", {}).get("name", "").lower() == "doctor" and u.get("is_active", False)
         }
 
         # Doctor selection and detail

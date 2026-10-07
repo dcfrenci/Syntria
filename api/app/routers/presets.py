@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import MultipleResultsFound
 
 from app.core.database import get_db
 from app.models import User
@@ -15,6 +16,7 @@ from app.schemas.presets import (
 
 router = APIRouter(prefix="/presets", tags=["Presets"])
 
+allow_read_active = RoleChecker(["admin", "manager", "secretary", "doctor", "employee", "client"])
 allow_read = RoleChecker(["admin", "manager", "secretary", "doctor"])
 allow_write = RoleChecker(["admin", "manager"])
 
@@ -51,6 +53,31 @@ async def get_presets(
     presets = (await db.execute(query.offset(skip).limit(limit))).scalars().all()
 
     return {"total": total, "presets": presets}
+
+
+@router.get("/active", response_model=PresetResponse, status_code=status.HTTP_200_OK)
+async def get_active_preset(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_read_active),
+):
+    # Assuming your model has an 'is_active' boolean column
+    query = select(Preset).where(Preset.is_active == True)
+    
+    try:
+        preset = (await db.execute(query)).scalar_one_or_none()
+    except MultipleResultsFound:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Data integrity error: Multiple active presets found. Only one is allowed."
+        )
+
+    if not preset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active preset found."
+        )
+
+    return preset
 
 
 @router.get(

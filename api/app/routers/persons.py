@@ -72,6 +72,9 @@ async def get_persons(
                 Person.phone_number.ilike(search_pattern),
             )
         )
+        
+    if current_user.role.name.lower() != "admin":
+        filters.append(Person.email != "admin@email.com")
 
     query = select(Person).options(selectinload(Person.reminder_preference))
     count_query = select(func.count(Person.id))

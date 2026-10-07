@@ -121,12 +121,12 @@ async def create_user(
     return new_user
 
 
-@router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
+@router.get("/me", response_model=UserListResponse, status_code=status.HTTP_200_OK)
 async def get_my_profile(
     current_user: User = Depends(allow_all_staff),
 ):
     """Retrieve details of the currently logged-in staff member."""
-    return current_user
+    return {"total": 1, "users": [current_user]}
 
 
 @router.get("/", response_model=UserListResponse, status_code=status.HTTP_200_OK)

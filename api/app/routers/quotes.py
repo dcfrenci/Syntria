@@ -113,16 +113,26 @@ async def get_quotes(
     role = current_user.role.name.lower()
     if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
-
-    if role in ["employee", "client"]:
-        patient_id = current_user.person_id
-
+    
     query = select(Quote).order_by(Quote.created_at.desc())
     count_query = select(func.count(Quote.id))
+    
+    role = current_user.role.name.lower()
+    
+    if role in ["assistant", "employee", "client"]:
+        patient_id = current_user.person_id
+        
+    if role == "doctor":
+        query = query.where(Quote.staff_id == current_user.person_id)
+        count_query = count_query.where(Quote.staff_id == current_user.person_id)
 
     if patient_id:
         query = query.where(Quote.patient_id == patient_id)
         count_query = count_query.where(Quote.patient_id == patient_id)
+
+    if role != "admin":
+        query = query.where(~Quote.patient.has(Person.email == "admin@email.com"))
+        count_query = count_query.where(~Quote.patient.has(Person.email == "admin@email.com"))
 
     total = (await db.execute(count_query)).scalar_one()
     quotes = (await db.execute(query.offset(skip).limit(limit))).scalars().all()

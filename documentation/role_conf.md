@@ -86,8 +86,8 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Admin**     |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |      :white_check_mark:      |
 | **Manager**   |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |      :white_check_mark:      |
 | **Secretary** |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
-| **Doctor**    |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
-| **Assistant** |  :white_check_mark:   |                        |    :white_check_mark:     |                             |                              |
+| **Doctor**    |  :white_check_mark:*  |  :white_check_mark:*   |    :white_check_mark:*    |     :white_check_mark:*      |                              |
+| **Assistant** |  :white_check_mark:*  |                        |    :white_check_mark:     |                             |                              |
 | **Employee**  |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
 | **Client**    |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
 

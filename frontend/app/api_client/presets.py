@@ -7,6 +7,11 @@ class PresetsClient:
         """Fetches all presets."""
         result = await APIClient.get("/presets/")
         return result.get("presets", []) if result else []
+    
+    @staticmethod
+    async def get_active_preset():
+        """Fetche active preset."""
+        return await APIClient.get("/presets/active")
 
     @staticmethod
     async def get_preset(preset_id: int):
