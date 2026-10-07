@@ -92,6 +92,7 @@ The data that will be loaded using this script are divided into two paragraph ba
 | ------------------------ | ----------------------- | --------- | ------ | ---------- |
 | (Admin System)           | admin@email.com         | admin     | True   | asTf82#1   |
 | (Matteo Bergamaschi)     | matteo.b@gmail.com      | manager   | True   | kL9$zQ2w   |
+| (Valentina Bruno)        | vale.bruno@email.com    | secretary | True   | sJ8*kP2m   |
 | (Giulia Rossi)           | giulia.rossi@email.com  | assistant | True   | pM4@vX7c   |
 | (Marco Bianchi)          | mbianchi88@yahoo.it     | doctor    | True   | rT2#yN9b   |
 | (Alessandro Romano)      | alex.romano@email.com   | employee  | True   | bV5&cH1k   |
@@ -105,7 +106,6 @@ The data that will be loaded using this script are divided into two paragraph ba
 | (Antonietta Della Bella) | antonella@email.com     | assistant | False  | testPass1! |
 | (Giuseppe Gallo)         | ggallo@yahoo.it         | employee  | False  | testPass1! |
 | (Elena Costa)            | elena.costa@gmail.com   | client    | False  | testPass1! |
-
 
 ### Reservations
 | Reservation Date         | Duration min. | Description | Patient ID          | Staff IDs                         |
@@ -256,34 +256,44 @@ The data that will be loaded using this script are divided into two paragraph ba
 
 
 ### Quote
-| Valid Until | Patient ID          | Staff ID        | Items                      | Quantity | Discout | Teeth            |
-| ----------- | ------------------- | --------------- | -------------------------- | -------- | ------- | ---------------- |
-| 2026-10-02  | (Chiara Esposito)   | (Marco Bianchi) | (Implant Maintenance)      | 1        | 0       | []               |
-|             |                     |                 | (Inlay-Retained Bridge)    | 2        | 0       | [33, 16]         |
-| 2026-10-15  | (Martina Colombo)   | (Sofia Ricci)   | (Teeth Whitening)          | 1        | 10      | []               |
-| 2026-10-18  | (Davide Marino)     | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
-|             |                     |                 | (Composite Filling)        | 1        | 0       | [14]             |
-| 2026-10-20  | (Sara Russo)        | (Marco Bianchi) | (Clear Aligners)           | 1        | 5       | []               |
-| 2026-10-22  | (Andrea Moretti)    | (Marco Bianchi) | (Root Canal Treatment)     | 1        | 0       | [26]             |
-|             |                     |                 | (Zirconia Dental Crown)    | 1        | 0       | [26]             |
-| 2026-10-25  | (Beatrice Barbieri) | (Marco Bianchi) | (Panoramic X-Ray)          | 1        | 0       | []               |
-|             |                     |                 | (Simple Tooth Extraction)  | 2        | 0       | [38, 48]         |
-| 2026-10-28  | (Simone Fontana)    | (Marco Bianchi) | (Single Dental Implant)    | 1        | 15      | [46]             |
-| 2026-11-02  | (Silvia Rinaldi)    | (Marco Bianchi) | (Porcelain Veneers)        | 4        | 20      | [11, 12, 21, 22] |
-| 2026-11-05  | (Giacomo Lombardi)  | (Sofia Ricci)   | (Full Dentures)            | 1        | 0       | []               |
-| 2026-11-10  | (Federica Caruso)   | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
-|             |                     |                 | (Composite Filling)        | 2        | 0       | [15, 25]         |
-| 2026-11-12  | (Stefano Ferrara)   | (Sofia Ricci)   | (Deep Scaling)             | 1        | 10      | []               |
-| 2026-11-15  | (Alessia Mariani)   | (Marco Bianchi) | (Traditional Metal Braces) | 1        | 0       | []               |
-| 2026-11-18  | (Nicola Bianco)     | (Sofia Ricci)   | (Ceramic Braces)           | 1        | 5       | []               |
-| 2026-11-20  | (Francesca Gatti)   | (Marco Bianchi) | (Panoramic X-Ray)          | 1        | 0       | []               |
-|             |                     |                 | (Wisdom Tooth Extraction)  | 1        | 0       | [28]             |
-| 2026-11-25  | (Michele Santoro)   | (Marco Bianchi) | (Gum Graft Surgery)        | 1        | 10      | [41, 42]         |
-| 2026-11-28  | (Paola Marini)      | (Sofia Ricci)   | (Dental Bonding)           | 1        | 0       | [11]             |
-| 2026-12-02  | (Daniele Sala)      | (Sofia Ricci)   | (Custom Night Guard)       | 1        | 0       | []               |
-| 2026-12-05  | (Laura Fiore)       | (Marco Bianchi) | (Apicoectomy)              | 1        | 0       | [22]             |
-| 2026-12-10  | (Elisa Coppola)     | (Marco Bianchi) | (Dental Cleaning)          | 1        | 5       | []               |
-|             |                     |                 | (Fluoride Application)     | 1        | 5       | []               |
-| 2026-12-15  | (Paolo Galli)       | (Sofia Ricci)   | (Bone Grafting)            | 1        | 15      | [36]             |
-|             |                     |                 | (Single Dental Implant)    | 1        | 15      | [36]             |
-| 2026-12-20  | (Martina D'Amico)   | (Marco Bianchi) | (Teeth Whitening)          | 1        | 0       | []               |
+| Valid Until | Patient ID               | Staff ID        | Items                      | Quantity | Discout | Teeth            |
+| ----------- | ------------------------ | --------------- | -------------------------- | -------- | ------- | ---------------- |
+| 2026-10-02  | (Chiara Esposito)        | (Marco Bianchi) | (Implant Maintenance)      | 1        | 0       | []               |
+|             |                          |                 | (Inlay-Retained Bridge)    | 2        | 0       | [33, 16]         |
+| 2026-10-15  | (Martina Colombo)        | (Sofia Ricci)   | (Teeth Whitening)          | 1        | 10      | []               |
+| 2026-10-18  | (Davide Marino)          | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+|             |                          |                 | (Composite Filling)        | 1        | 0       | [14]             |
+| 2026-10-20  | (Sara Russo)             | (Marco Bianchi) | (Clear Aligners)           | 1        | 5       | []               |
+| 2026-10-22  | (Andrea Moretti)         | (Marco Bianchi) | (Root Canal Treatment)     | 1        | 0       | [26]             |
+|             |                          |                 | (Zirconia Dental Crown)    | 1        | 0       | [26]             |
+| 2026-10-25  | (Beatrice Barbieri)      | (Marco Bianchi) | (Panoramic X-Ray)          | 1        | 0       | []               |
+|             |                          |                 | (Simple Tooth Extraction)  | 2        | 0       | [38, 48]         |
+| 2026-10-28  | (Simone Fontana)         | (Marco Bianchi) | (Single Dental Implant)    | 1        | 15      | [46]             |
+| 2026-11-02  | (Silvia Rinaldi)         | (Marco Bianchi) | (Porcelain Veneers)        | 4        | 20      | [11, 12, 21, 22] |
+| 2026-11-05  | (Giacomo Lombardi)       | (Sofia Ricci)   | (Full Dentures)            | 1        | 0       | []               |
+| 2026-11-10  | (Federica Caruso)        | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+|             |                          |                 | (Composite Filling)        | 2        | 0       | [15, 25]         |
+| 2026-11-12  | (Stefano Ferrara)        | (Sofia Ricci)   | (Deep Scaling)             | 1        | 10      | []               |
+| 2026-11-15  | (Alessia Mariani)        | (Marco Bianchi) | (Traditional Metal Braces) | 1        | 0       | []               |
+| 2026-11-18  | (Nicola Bianco)          | (Sofia Ricci)   | (Ceramic Braces)           | 1        | 5       | []               |
+| 2026-11-20  | (Francesca Gatti)        | (Marco Bianchi) | (Panoramic X-Ray)          | 1        | 0       | []               |
+|             |                          |                 | (Wisdom Tooth Extraction)  | 1        | 0       | [28]             |
+| 2026-11-25  | (Michele Santoro)        | (Marco Bianchi) | (Gum Graft Surgery)        | 1        | 10      | [41, 42]         |
+| 2026-11-28  | (Paola Marini)           | (Sofia Ricci)   | (Dental Bonding)           | 1        | 0       | [11]             |
+| 2026-12-02  | (Daniele Sala)           | (Sofia Ricci)   | (Custom Night Guard)       | 1        | 0       | []               |
+| 2026-12-05  | (Laura Fiore)            | (Marco Bianchi) | (Apicoectomy)              | 1        | 0       | [22]             |
+| 2026-12-10  | (Elisa Coppola)          | (Marco Bianchi) | (Dental Cleaning)          | 1        | 5       | []               |
+|             |                          |                 | (Fluoride Application)     | 1        | 5       | []               |
+| 2026-12-15  | (Paolo Galli)            | (Sofia Ricci)   | (Bone Grafting)            | 1        | 15      | [36]             |
+|             |                          |                 | (Single Dental Implant)    | 1        | 15      | [36]             |
+| 2026-12-20  | (Martina D'Amico)        | (Marco Bianchi) | (Teeth Whitening)          | 1        | 0       | []               |
+| 2026-12-25  | (Matteo Bergamaschi)     | (Sofia Ricci)   | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Giulia Rossi)           | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Marco Bianchi)          | (Sofia Ricci)   | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Alessandro Romano)      | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Francesco Della Casa)   | (Sofia Ricci)   | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Lorenzo Ferrari)        | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Sofia Ricci)            | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Antonietta Della Bella) | (Sofia Ricci)   | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Giuseppe Gallo)         | (Marco Bianchi) | (Dental Cleaning)          | 1        | 0       | []               |
+| 2026-12-25  | (Elena Costa)            | (Sofia Ricci)   | (Dental Cleaning)          | 1        | 0       | []               |

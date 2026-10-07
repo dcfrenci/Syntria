@@ -83,7 +83,7 @@ Create your environment and install the `requirements.txt`:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install scripts/requirements.txt
+pip install -r scripts/requirements.txt
 ```
 Create your enviroment file by copying the provided example and adding your Tailscale Auth Key:
 ```bash
@@ -101,11 +101,11 @@ docker compose up --build -d
 ### 3. Database Initialization
 To set up the database schema and initialize the default Admin user (`admin@email.com` / `asTf82#1`), roles and reminder preferences, run:
 ```bash
-python3 scripts/initialize.py --default
+python3 scripts/initialize.py
 ```
-> **Note:** If you want to deploy a demonstration environment with pre-filled mock data (patients, catalog items, existing quotes, and sample schedules), run the script without the admin flag: `python3 scripts/initialize.py`
+> 📝 **Note:** If you want to deploy a demonstration environment with pre-filled mock data (patients, catalog items, existing quotes, and sample schedules), run the script without the admin flag: `python3 scripts/initialize.py --pre-filled`
 
-> **Note:** If you want to see all the permissions of the roles or the whole database initialization, check these files: `role_conf.md` and `database_conf.md`
+> 📝 **Note:** If you want to see all the permissions of the roles or the whole database initialization, check these files: `role_conf.md` and `database_conf.md`
 
 ---
 
@@ -130,8 +130,8 @@ docker exec tailscale_gateway tailscale serve --bg --https=8443 http://nginx:81
 To execute automated role permission tests and validate API access controls in an ephemeral environment, run:
 ```bash
 docker compose up --build -d
-python3 scripts/initialize.py
+python3 scripts/initialize.py --pre-filled
 python3 scripts/role_testing.py
 docker compose down -v
 ```
->⚠️ **Important**: Because the final command (docker compose down -v) completely destroys the containers and their local volumes, you will need to re-run the commands in the Networking & Access (Tailscale) section when you bring the stack back online for regular use.
+> ⚠️ **Warnin**:: Because the final command (docker compose down -v) completely destroys the containers and their local volumes, you will need to re-run the commands in the Networking & Access (Tailscale) section when you bring the stack back online for regular use.

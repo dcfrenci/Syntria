@@ -185,8 +185,8 @@ if __name__ == "__main__":
             quotes_ids = create_quotes(token, p_map, i_map)
             reservations_ids = create_reservations(token, p_map)
 
-            print("Prefill database population complete.")
+            print("\nPrefill database population complete.")
         else:
-            print("Database population complete.")
+            print("\nDatabase population complete.")
     else:
-        print("Aborting database population due to authentication failure.")
+        print("\nAborting database population due to authentication failure.")

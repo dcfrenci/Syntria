@@ -1751,6 +1751,136 @@ def get_quotes(p_map: dict, i_map: dict):
                 }
             ],
         },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Matteo Bergamaschi"],
+            "staff_id": p_map["Sofia Ricci"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Giulia Rossi"],
+            "staff_id": p_map["Marco Bianchi"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Marco Bianchi"],
+            "staff_id": p_map["Sofia Ricci"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Alessandro Romano"],
+            "staff_id": p_map["Marco Bianchi"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Francesco Della Casa"],
+            "staff_id": p_map["Sofia Ricci"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Lorenzo Ferrari"],
+            "staff_id": p_map["Marco Bianchi"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Sofia Ricci"],
+            "staff_id": p_map["Marco Bianchi"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Antonietta Della Bella"],
+            "staff_id": p_map["Sofia Ricci"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Giuseppe Gallo"],
+            "staff_id": p_map["Marco Bianchi"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
+        {
+            "valid_until": "2026-12-25",
+            "patient_id": p_map["Elena Costa"],
+            "staff_id": p_map["Sofia Ricci"],
+            "items": [
+                {
+                    "item_id": i_map["Dental Cleaning"],
+                    "quantity": 1,
+                    "discount": 0.0,
+                    "teeth": [],
+                }
+            ],
+        },
     ]
 
 
