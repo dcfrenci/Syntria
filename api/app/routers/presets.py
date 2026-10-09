@@ -18,7 +18,8 @@ router = APIRouter(prefix="/presets", tags=["Presets"])
 
 allow_read_active = RoleChecker(["admin", "manager", "secretary", "doctor", "employee", "client"])
 allow_read = RoleChecker(["admin", "manager", "secretary", "doctor"])
-allow_write = RoleChecker(["admin", "manager"])
+allow_write = RoleChecker(["admin", "manager", "secretary"])
+allow_delete = RoleChecker(["admin", "manager"])
 
 
 @router.post("/", response_model=PresetResponse, status_code=status.HTTP_201_CREATED)
@@ -131,7 +132,7 @@ async def update_preset(
 async def delete_preset(
     preset_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(allow_write),
+    current_user: User = Depends(allow_delete),
 ):
     preset = await db.get(Preset, preset_id)
     if not preset:
