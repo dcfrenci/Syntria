@@ -1,4 +1,7 @@
+from datetime import date
+
 from nicegui import ui
+
 from api_client.persons import PersonsClient
 from api_client.reminders import RemindersClient
 from api_client.users import UsersClient
@@ -63,23 +66,25 @@ class PersonModal:
                     .props("outlined type=email")
                 )
                 self.phone_number_input = (
-                    ui.input("Phone Number")
+                    ui.input("Phone Number *")
                     .bind_value(self.person_data, "phone_number")
                     .classes("w-full")
                     .props("outlined")
                 )
 
+                # Set min/max to prevent 6-digit years or futuristic dates
+                today_str = date.today().isoformat()
                 self.birth_date_input = (
-                    ui.input("Birth Date")
+                    ui.input("Birth Date *")
                     .bind_value(self.person_data, "birth_date")
                     .classes("w-full")
-                    .props("outlined type=date")
+                    .props(f'outlined type=date min="1900-01-01" max="{today_str}"')
                 )
 
                 self.reminder_input = (
                     ui.select(
                         options=pref_options,
-                        label="Reminder Preference",
+                        label="Reminder Preference *",
                         clearable=True,
                     )
                     .bind_value(self.person_data, "reminder_preference_id")
@@ -94,13 +99,16 @@ class PersonModal:
                 ui.button("Save", on_click=self.save).props("unelevated color=primary")
 
     async def save(self):
-        # Basic validation
+        # Validation for all required fields
         if (
             not self.person_data["first_name"]
             or not self.person_data["last_name"]
             or not self.person_data["email"]
+            or not self.person_data["phone_number"]
+            or not self.person_data["birth_date"]
+            or not self.person_data["reminder_preference_id"]
         ):
-            ui.notify("First Name, Last Name, and Email are required.", type="warning")
+            ui.notify("All details are required.", type="warning")
             return
 
         # Clean empty values
@@ -142,6 +150,7 @@ class UserModal:
             "password": "",
             "is_active": True,
         }
+        self.password_confirm = ""  # New attribute for the confirmation password
         self.original_user_data = {}
 
     async def build(self):
@@ -202,6 +211,14 @@ class UserModal:
                     .classes("w-full")
                     .props("outlined")
                 )
+                
+                # New confirm password input
+                self.password_confirm_input = (
+                    ui.input("Confirm Password", password=True, password_toggle_button=True)
+                    .bind_value(self, "password_confirm")
+                    .classes("w-full")
+                    .props("outlined")
+                )
 
                 self.active_input = (
                     ui.checkbox("Account is Active")
@@ -221,6 +238,11 @@ class UserModal:
             return
         if not self.user_id and not self.user_data["password"]:
             ui.notify("Password is required for new users.", type="warning")
+            return
+            
+        # Match validation check
+        if self.user_data["password"] != self.password_confirm:
+            ui.notify("Passwords do not match.", type="negative")
             return
 
         # Create a true PATCH payload

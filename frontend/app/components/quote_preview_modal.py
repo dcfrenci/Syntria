@@ -86,7 +86,6 @@ class QuotePreviewModal:
         ROW_HEIGHT = 45
         FOOTER_HEIGHT = 50
 
-        # Remove the box-shadow for the unscaled 1.0 version to prevent a border artifact in the PDF
         shadow_style = 'box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);' if scale < 1.0 else ''
 
         for i, p_data in enumerate(pages_data):

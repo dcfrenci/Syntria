@@ -1,6 +1,6 @@
 import httpx
 from datetime import datetime
-from nicegui import ui
+from nicegui import ui, app
 from api_client.persons import PersonsClient
 from api_client.users import UsersClient
 from api_client.roles import RolesClient
@@ -33,6 +33,8 @@ def handle_api_error(e: Exception, action: str):
 
 async def persons_page():
     """Renders the comprehensive Directory, Users, Roles, and Reminders view."""
+
+    user_role = app.storage.user.get('role', '').lower()
 
     with ui.column().classes("w-full gap-10"):
         ui.label("System Manager & Access").classes(Style.title())
@@ -276,15 +278,16 @@ async def persons_page():
             with ui.row().classes(Style.row_end()):
                 ui.button("New", icon="r_add", on_click=open_new_user)
                 ui.button("Edit", icon="r_edit", on_click=open_edit_user)
-                ui.button(
-                    "Delete",
-                    icon="r_delete",
-                    on_click=lambda: (
-                        delete_user_diag.open()
-                        if check_selected(table_users, "user")
-                        else None
-                    ),
-                )
+                if user_role in ["admin"]:
+                    ui.button(
+                        "Delete",
+                        icon="r_delete",
+                        on_click=lambda: (
+                            delete_user_diag.open()
+                            if check_selected(table_users, "user")
+                            else None
+                        ),
+                    )
 
         # Role
         with ui.column().classes("w-full"):
@@ -316,14 +319,15 @@ async def persons_page():
                 row_key="id",
             ).classes(Style.table())
 
-            with ui.row().classes(Style.row_end()):
-                ui.button(
-                    "New Role",
-                    icon="r_add",
-                    on_click=lambda: simple_name_modal(
-                        "New Role", "Role Name", save_role
-                    ).open(),
-                )
+            if user_role in ["admin"]:
+                with ui.row().classes(Style.row_end()):
+                    ui.button(
+                        "New Role",
+                        icon="r_add",
+                        on_click=lambda: simple_name_modal(
+                            "New Role", "Role Name", save_role
+                        ).open(),
+                    )
 
         # Reminders
         with ui.column().classes("w-full pb-10"):
@@ -355,11 +359,12 @@ async def persons_page():
                 row_key="id",
             ).classes(Style.table())
 
-            with ui.row().classes(Style.row_end()):
-                ui.button(
-                    "New Preference",
-                    icon="r_add",
-                    on_click=lambda: simple_name_modal(
-                        "New Reminder Preference", "Preference Name", save_reminder
-                    ).open(),
-                )
+            if user_role in ["admin"]:
+                with ui.row().classes(Style.row_end()):
+                    ui.button(
+                        "New Preference",
+                        icon="r_add",
+                        on_click=lambda: simple_name_modal(
+                            "New Reminder Preference", "Preference Name", save_reminder
+                        ).open(),
+                    )

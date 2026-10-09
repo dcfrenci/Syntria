@@ -22,7 +22,12 @@ async def list_roles(
     current_user: User = Depends(allow_admin_mgr),
 ):
     result = await db.execute(select(Role).order_by(Role.name))
-    return result.scalars().all()
+    roles = result.scalars().all()
+
+    if current_user.role.name.lower() != "admin":
+        roles = [role for role in roles if role.name.lower() != "admin"]
+
+    return roles
 
 
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)

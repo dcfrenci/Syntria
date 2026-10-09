@@ -190,6 +190,7 @@ async def update_person(
         setattr(person, field, value)
 
     await db.flush()
+    await db.refresh(person)
     await db.refresh(person, ["reminder_preference"])
     return person
 

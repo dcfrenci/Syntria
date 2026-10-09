@@ -31,7 +31,7 @@ def create_sidebar(active_route: str = "/"):
 
             menu_item("r_home", "Home", "/home")
             menu_item("r_menu_book", "Agenda", "/agenda")
-            if user_role in ["admin", "manager", "secretary", "doctor"]:
+            if user_role in ["admin", "manager", "secretary"]:
                 menu_item("r_person", "Persons", "/persons")
             if user_role in [
                 "admin",
