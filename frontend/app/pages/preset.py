@@ -2,7 +2,7 @@ import uuid
 import base64
 import inspect
 from datetime import datetime
-from nicegui import ui, events
+from nicegui import ui, events, app
 from components.style import Style
 from components.modals import confirmation_modal
 from components.quote_preview_modal import QuotePreviewModal
@@ -85,6 +85,10 @@ def preset_page():
 
 
 async def preset_list():
+    user_role = app.storage.user.get('role', '').lower()
+    
+    preview_modal = QuotePreviewModal()
+
     with ui.column().classes("w-full"):
         ui.label("Quote Presets").classes(Style.title())
 
@@ -119,6 +123,22 @@ async def preset_list():
         async def on_set_active_click():
             if check_selected(table_presets, "preset"):
                 await set_active(table_presets.selected[0]["id"])
+
+        async def preview_preset():
+            if check_selected(table_presets, "preset"):
+                preset_id = table_presets.selected[0]["id"]
+                try:
+                    preset = await PresetsClient.get_preset(preset_id)
+                    if preset:
+                        preset_data = {
+                            "elements": preset.get("elements", []),
+                            "margins": preset.get(
+                                "margins", {"top": 96.0, "right": 96.0, "bottom": 96.0, "left": 96.0}
+                            )
+                        }
+                        await preview_modal.open(preset_data, FAKE_QUOTE)
+                except Exception as e:
+                    ui.notify(f"Could not load preset {preset_id}: {e}", type="negative")
 
         def edit_preset():
             if check_selected(table_presets, "preset"):
@@ -189,21 +209,23 @@ async def preset_list():
         )
 
         with ui.row().classes(Style.row_end()):
-            ui.button("Set Active", icon="check_circle", on_click=on_set_active_click)
-            ui.button(
-                "New", icon="r_add", on_click=lambda: ui.navigate.to("/preset/create")
-            )
-            ui.button("Edit", icon="r_edit", on_click=edit_preset)
-            ui.button(
-                "Delete",
-                icon="r_delete",
-                on_click=lambda: (
-                    delete_diag.open()
-                    if check_selected(table_presets, "preset")
-                    else None
-                ),
-            )
-
+            if user_role in ["admin", "manager", "secretary"]:
+                ui.button("Set Active", icon="check_circle", on_click=on_set_active_click)
+            ui.button("Preview", icon="visibility", on_click=preview_preset)
+            if user_role in ["admin", "manager", "secretary"]:
+                ui.button(
+                    "New", icon="r_add", on_click=lambda: ui.navigate.to("/preset/create")
+                )
+                ui.button("Edit", icon="r_edit", on_click=edit_preset)
+                ui.button(
+                    "Delete",
+                    icon="r_delete",
+                    on_click=lambda: (
+                        delete_diag.open()
+                        if check_selected(table_presets, "preset")
+                        else None
+                    ),
+                )
 
 async def preset_create():
     state = QuoteBuilderState()
@@ -477,7 +499,7 @@ def builder_ui(state: QuoteBuilderState):
         scaled_w = A4_WIDTH * state.scale
         scaled_h = A4_HEIGHT * state.scale
 
-        with ui.element("div").classes("relative").style(
+        with ui.element("div").classes("relative mx-auto").style(
             f"width: {scaled_w}px; height: {scaled_h}px;"
         ):
 
@@ -1130,6 +1152,6 @@ def builder_ui(state: QuoteBuilderState):
                     )
 
                 with ui.column().classes(
-                    "w-full h-full overflow-auto items-center justify-start p-6"
+                    "w-full h-full overflow-auto items-start justify-start p-6"
                 ):
                     render_canvas_area()
