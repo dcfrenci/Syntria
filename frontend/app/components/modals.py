@@ -21,11 +21,12 @@ async def service_modal(title: str, on_save_callback, item_id: int | None = None
         ui.label(title).classes(Style.h1())
 
         category = ui.select(
-            options={category["id"]: category["name"] for category in categories}
+            label="Select Category",
+            options={category["id"]: category["name"] for category in categories if category["is_active"]},
         ).classes(Style.p())
         name = ui.input("Name").classes(Style.p())
         description = ui.input("Description").classes(Style.p())
-        price = ui.number("Price", format="%.2f").classes(Style.p())
+        price = ui.number("Price", format="%.2f", min=0.0).classes(Style.p())
         specific = ui.checkbox("Specific").classes(Style.p())
         active = ui.checkbox("Active").classes(Style.p())
 
@@ -269,9 +270,9 @@ async def reservation_modal(
                     label="Service", options={s["id"]: s["name"] for s in raw_services}
                 ).classes(Style.p())
 
-                duration = ui.number("Duration minutes", min=0, on_change=new_event).classes(
-                    Style.p()
-                )
+                duration = ui.number(
+                    "Duration minutes", min=0, on_change=new_event
+                ).classes(Style.p())
                 description = ui.input("Description").classes(Style.p())
 
             # Calendar view

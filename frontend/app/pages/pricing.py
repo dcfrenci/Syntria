@@ -42,6 +42,7 @@ async def pricing_page():
                 }
                 for item in raw_items
             ]
+            items.sort(key=lambda x: (x["category"].lower(), x["name"].lower()))
             return items
 
         async def refresh_items():
@@ -120,10 +121,23 @@ async def pricing_page():
         async def delete_category(value: bool):
             if value:
                 await ServicesClient.delete_category(
-                    item_id=table_categories.selected[0]["id"]
+                    category_id=table_categories.selected[0]["id"]
                 )
-                await refresh_items()
+                await refresh_categories()
                 ui.notify("The category has been deleted", type="positive")
+                
+        def attempt_delete_category():
+            if not check_selected(table_categories, type="category"):
+                return
+            selected_cat_id = table_categories.selected[0]["id"]
+            is_in_use = any(item.get("category_id") == selected_cat_id for item in table_items.rows)
+            if is_in_use:
+                ui.notify(
+                    "Cannot delete this category because it is currently assigned to one or more services.", 
+                    type="warning"
+                )
+            else:
+                delete_category_diag.open()
 
         ui.label("Pricing").classes(Style.title())
 
@@ -221,4 +235,4 @@ async def pricing_page():
             with ui.row().classes(Style.row_end()):
                 ui.button("New", icon="r_add", on_click=new_category)
                 ui.button("Edit", icon="r_edit", on_click=edit_category)
-                ui.button("Delete", icon="r_delete", on_click=delete_category_diag.open)
+                ui.button("Delete", icon="r_delete", on_click=attempt_delete_category)

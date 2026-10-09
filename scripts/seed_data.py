@@ -72,6 +72,32 @@ def get_categories():
             "description": "Urgent care for severe toothaches and dental trauma",
             "is_active": False,
         },
+        # NOT active
+        {
+            "name": "Cosmetic Dentistry",
+            "description": "Teeth whitening, veneers, and smile makeovers",
+            "is_active": False,
+        },
+        {
+            "name": "Preventive Dentistry",
+            "description": "Routine cleanings, sealants, and fluoride treatments",
+            "is_active": False,
+        },
+        {
+            "name": "Diagnostic Services",
+            "description": "X-rays, 3D imaging, and comprehensive oral exams",
+            "is_active": False,
+        },
+        {
+            "name": "Restorative Dentistry",
+            "description": "Fillings, inlays, and onlays for damaged teeth",
+            "is_active": False,
+        },
+        {
+            "name": "Geriatric Dentistry",
+            "description": "Specialized dental care tailored for elderly patients",
+            "is_active": False,
+        }
     ]
 
 
