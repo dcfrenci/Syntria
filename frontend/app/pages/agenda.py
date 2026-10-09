@@ -31,13 +31,11 @@ class Agenda:
 
     async def _update_ui(self):
         # 1. Fetch new data using the async API call
-        # Pass self.doctor_id even if it's None so the backend handles the default
         new_reservations = await AgendaClient.get_reservations_week(
-            start_date=self.get_week_start().isoformat(),
-            doctor_id=self.doctor_id 
+            start_date=self.get_week_start().isoformat(), doctor_id=self.doctor_id
         )
 
-        # 2. Update the Calendar component (refreshes headers and events, ignores static grid)
+        # 2. Update the Calendar component
         self.calendar.update_calendar(
             new_dates=self.get_current_week_dates(), new_reservations=new_reservations
         )
@@ -52,6 +50,22 @@ class Agenda:
         self.week_shift += 1
         await self._update_ui()
 
+    async def jump_to_date(self, target_date_str: str):
+        # Convert selected string to date object
+        target_date = datetime.datetime.strptime(target_date_str, "%Y-%m-%d").date()
+
+        # Calculate the Monday of the base week and the selected week
+        base_monday = self.current_date - datetime.timedelta(
+            days=self.current_date.weekday()
+        )
+        target_monday = target_date - datetime.timedelta(days=target_date.weekday())
+
+        # Determine how many weeks to shift
+        diff_days = (target_monday - base_monday).days
+        self.week_shift = diff_days // 7
+
+        await self._update_ui()
+
     async def set_doctor(self, doctor_id: int):
         self.doctor_id = doctor_id
         self.week_shift = 0
@@ -59,17 +73,32 @@ class Agenda:
 
     @ui.refreshable
     def date_navigator(self):
-        with ui.row().classes("w-full justify-center items-center mb-4"):
+        with ui.row().classes("w-full justify-center items-center mb-4 gap-2"):
             ui.button(icon="chevron_left", on_click=self.previous_week).props(
                 "flat round dense"
             )
 
-            with ui.element().classes("w-[320px]"):
+            # Make the week label a clickable button that opens the date menu
+            with ui.element("div").classes(
+                "w-[320px] text-center cursor-pointer hover:bg-gray-100 rounded-lg p-2 transition-colors"
+            ) as date_picker_trigger:
                 start = self.get_week_start()
                 end = self.get_week_end()
+
                 ui.label(
                     f"Week of {start.day} {start.strftime('%B')} - {end.day} {end.strftime('%B')}"
-                ).classes("text-center text-lg font-semibold w-full block")
+                ).classes("text-lg font-semibold w-full block pointer-events-none")
+
+                # The pop-up menu containing the calendar
+                with ui.menu() as date_menu:
+
+                    async def on_date_pick(e):
+                        await self.jump_to_date(e.value)
+                        date_menu.close()
+
+                    ui.date(value=start.strftime("%Y-%m-%d"), on_change=on_date_pick)
+
+            date_picker_trigger.on("click", date_menu.open)
 
             ui.button(icon="chevron_right", on_click=self.next_week).props(
                 "flat round dense"
@@ -129,7 +158,7 @@ async def agenda_page():
 
     if user_role in ["admin", "manager", "secretary"]:
         all_users = await UsersClient.get_users()
-            
+
         doctors = {
             u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
             for u in all_users
@@ -147,7 +176,7 @@ async def agenda_page():
             ui.select(
                 label="Select doctor", options=doctors, on_change=update_agenda
             ).classes(f"max-w-1/3 {Style.p()}")
-    
+
     if user_role in ["doctor"]:
         user = await UsersClient.get_user_me()
         await my_agenda.set_doctor(doctor_id=user.get("id", None))
@@ -162,7 +191,7 @@ async def agenda_page():
             day_width=130,
             reservations=[],
         )
-        
+
     await my_agenda._update_ui()
 
     # Floating buttons

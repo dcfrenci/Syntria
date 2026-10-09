@@ -1308,161 +1308,59 @@ def get_reservations(p_map: dict):
     # Set the base reference to midnight UTC of the current day
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     
-    def rel_date(days_offset, hour, minute, second=0, ms=0):
-        """Generates an ISO 8601 formatted string relative to 'today'."""
-        dt = today + timedelta(days=days_offset, hours=hour, minutes=minute, seconds=second, milliseconds=ms)
+    # Calculate the Monday of the current week (0 = Monday)
+    start_of_week = today - timedelta(days=today.weekday())
+    
+    def week_date(days_offset, hour, minute, second=0, ms=0):
+        """Generates an ISO 8601 formatted string relative to Monday of the current week."""
+        dt = start_of_week + timedelta(days=days_offset, hours=hour, minutes=minute, seconds=second, milliseconds=ms)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
 
-    return [
-        {
-            "reservation_date": rel_date(-5, 18, 30),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Elisa Coppola"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(-3, 9, 0),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Martina Colombo"],
-            "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(-3, 10, 0),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Lorenzo Ferrari"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(-3, 10, 30),
-            "duration_minutes": 45,
-            "description": "description",
-            "patient_id": p_map["Chiara Esposito"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(-3, 11, 15),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Davide Marino"],
-            "staff_ids": [p_map["Sofia Ricci"]],
-        },
-        {
-            "reservation_date": rel_date(-3, 14, 0),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Sara Russo"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(-1, 9, 30),
-            "duration_minutes": 45,
-            "description": "description",
-            "patient_id": p_map["Andrea Moretti"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(-1, 10, 15),
-            "duration_minutes": 90,
-            "description": "description",
-            "patient_id": p_map["Beatrice Barbieri"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(-1, 11, 45),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Simone Fontana"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(-1, 14, 30),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Silvia Rinaldi"],
-            "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(1, 9, 0),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Giacomo Lombardi"],
-            "staff_ids": [p_map["Sofia Ricci"]],
-        },
-        {
-            "reservation_date": rel_date(1, 9, 30),
-            "duration_minutes": 120,
-            "description": "description",
-            "patient_id": p_map["Federica Caruso"],
-            "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(1, 11, 30),
-            "duration_minutes": 45,
-            "description": "description",
-            "patient_id": p_map["Stefano Ferrara"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(1, 14, 0),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Alessia Mariani"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(3, 10, 0),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Nicola Bianco"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(3, 10, 30),
-            "duration_minutes": 45,
-            "description": "description",
-            "patient_id": p_map["Francesca Gatti"],
-            "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(3, 11, 15),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Michele Santoro"],
-            "staff_ids": [p_map["Marco Bianchi"]],
-        },
-        {
-            "reservation_date": rel_date(3, 14, 0),
-            "duration_minutes": 30,
-            "description": "description",
-            "patient_id": p_map["Paola Marini"],
-            "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(5, 9, 0),
-            "duration_minutes": 90,
-            "description": "description",
-            "patient_id": p_map["Daniele Sala"],
-            "staff_ids": [p_map["Sofia Ricci"]],
-        },
-        {
-            "reservation_date": rel_date(5, 10, 30),
-            "duration_minutes": 45,
-            "description": "description",
-            "patient_id": p_map["Laura Fiore"],
-            "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
-        },
-        {
-            "reservation_date": rel_date(5, 11, 15),
-            "duration_minutes": 60,
-            "description": "description",
-            "patient_id": p_map["Elisa Coppola"],
-            "staff_ids": [p_map["Sofia Ricci"]],
-        },
-    ]
+    reservations = []
+    
+    # Identify available staff members
+    marco = p_map.get("Marco Bianchi")
+    sofia = p_map.get("Sofia Ricci")
+    giulia = p_map.get("Giulia Rossi")
+    
+    day_offset = 0  # Start on Monday
+    hour = 9
+    minute = 0
+    
+    # Create exactly one appointment for every person in the system
+    for i, (person_name, person_id) in enumerate(p_map.items()):
+        # Alternate the primary doctor
+        staff = [marco] if i % 2 == 0 else [sofia]
+        
+        # Assign the assistant to every 3rd appointment
+        if i % 3 == 0:
+            staff.append(giulia)
+            
+        reservations.append({
+            "reservation_date": week_date(day_offset, hour, minute),
+            "duration_minutes": 45 if i % 2 == 0 else 60,
+            "description": f"Appointment for {person_name}",
+            "patient_id": person_id,
+            "staff_ids": staff,
+        })
+        
+        # Increment time by 45 minutes for the next slot
+        minute += 45
+        if minute >= 60:
+            hour += 1
+            minute -= 60
+            
+        # Move to the next day if we pass 17:00 (5:00 PM)
+        if hour >= 17:
+            hour = 9
+            minute = 0
+            day_offset += 1
+            
+            # Wrap around to Monday if we exceed Friday (day offset 4)
+            if day_offset > 4:
+                day_offset = 0
 
+    return reservations
 
 def get_quotes(p_map: dict, i_map: dict):
     return [
