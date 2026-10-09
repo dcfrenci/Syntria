@@ -193,7 +193,7 @@ async def quote_detail(
         persons = {p["id"]: p for p in await PersonsClient.get_persons()}
         users = await UsersClient.get_users()
         if len(users) == 0:
-            users = await UsersClient.get_user_me()
+            users = [await UsersClient.get_user_me()]
         
         doctor_person_ids = {
             u["person"]["id"]

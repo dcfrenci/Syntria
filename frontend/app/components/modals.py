@@ -171,7 +171,7 @@ async def reservation_modal(
         )
         if doctor.value is None or not res_state["date"]:
             return target_date, []
-        week_reservation = await AgendaClient.get_reservations_doctor_week(
+        week_reservation = await AgendaClient.get_reservations_week(
             doctor_id=doctor.value, start_date=res_state["date"]
         )
         return target_date, week_reservation
@@ -190,6 +190,8 @@ async def reservation_modal(
     # Fetch data and filter doctors / active services
     raw_persons = await PersonsClient.get_persons()
     all_users = await UsersClient.get_users()
+    if len(all_users) == 0:
+        all_users = [await UsersClient.get_user_me()]
     raw_services = await ServicesClient.get_items(is_active=True)
 
     doctors = {
@@ -267,7 +269,7 @@ async def reservation_modal(
                     label="Service", options={s["id"]: s["name"] for s in raw_services}
                 ).classes(Style.p())
 
-                duration = ui.number("Duration minutes", on_change=new_event).classes(
+                duration = ui.number("Duration minutes", min=0, on_change=new_event).classes(
                     Style.p()
                 )
                 description = ui.input("Description").classes(Style.p())
@@ -286,6 +288,8 @@ async def reservation_modal(
         # Safely initialize values based on IDs
         if doctor_id and doctor_id in doctors:
             doctor.value = doctor_id
+        if len(doctors) == 1:
+            doctor.value = next(iter(doctors))
 
         if reservation_id:
             reservation = await AgendaClient.get_reservation_with_id(reservation_id)

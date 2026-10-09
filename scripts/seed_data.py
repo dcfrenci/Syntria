@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 def get_reminders():
     return [{"name": "Sms"}, {"name": "WhatsApp"}, {"name": "Telegram"}]
 
@@ -1277,149 +1279,157 @@ def get_items(c_map: dict):
 
 
 def get_reservations(p_map: dict):
+    # Set the base reference to midnight UTC of the current day
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    def rel_date(days_offset, hour, minute, second=0, ms=0):
+        """Generates an ISO 8601 formatted string relative to 'today'."""
+        dt = today + timedelta(days=days_offset, hours=hour, minutes=minute, seconds=second, milliseconds=ms)
+        return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+
     return [
         {
-            "reservation_date": "2026-10-02T18:29:16.671Z",
+            "reservation_date": rel_date(-5, 18, 30),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Elisa Coppola"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-03T09:00:00.000Z",
+            "reservation_date": rel_date(-3, 9, 0),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Martina Colombo"],
             "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-03T10:00:00.000Z",
+            "reservation_date": rel_date(-3, 10, 0),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Lorenzo Ferrari"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-03T10:30:00.000Z",
+            "reservation_date": rel_date(-3, 10, 30),
             "duration_minutes": 45,
             "description": "description",
             "patient_id": p_map["Chiara Esposito"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-03T11:15:00.000Z",
+            "reservation_date": rel_date(-3, 11, 15),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Davide Marino"],
             "staff_ids": [p_map["Sofia Ricci"]],
         },
         {
-            "reservation_date": "2026-10-03T14:00:00.000Z",
+            "reservation_date": rel_date(-3, 14, 0),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Sara Russo"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-04T09:30:00.000Z",
+            "reservation_date": rel_date(-1, 9, 30),
             "duration_minutes": 45,
             "description": "description",
             "patient_id": p_map["Andrea Moretti"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-04T10:15:00.000Z",
+            "reservation_date": rel_date(-1, 10, 15),
             "duration_minutes": 90,
             "description": "description",
             "patient_id": p_map["Beatrice Barbieri"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-04T11:45:00.000Z",
+            "reservation_date": rel_date(-1, 11, 45),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Simone Fontana"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-04T14:30:00.000Z",
+            "reservation_date": rel_date(-1, 14, 30),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Silvia Rinaldi"],
             "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-05T09:00:00.000Z",
+            "reservation_date": rel_date(1, 9, 0),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Giacomo Lombardi"],
             "staff_ids": [p_map["Sofia Ricci"]],
         },
         {
-            "reservation_date": "2026-10-05T09:30:00.000Z",
+            "reservation_date": rel_date(1, 9, 30),
             "duration_minutes": 120,
             "description": "description",
             "patient_id": p_map["Federica Caruso"],
             "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-05T11:30:00.000Z",
+            "reservation_date": rel_date(1, 11, 30),
             "duration_minutes": 45,
             "description": "description",
             "patient_id": p_map["Stefano Ferrara"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-05T14:00:00.000Z",
+            "reservation_date": rel_date(1, 14, 0),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Alessia Mariani"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-06T10:00:00.000Z",
+            "reservation_date": rel_date(3, 10, 0),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Nicola Bianco"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-06T10:30:00.000Z",
+            "reservation_date": rel_date(3, 10, 30),
             "duration_minutes": 45,
             "description": "description",
             "patient_id": p_map["Francesca Gatti"],
             "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-06T11:15:00.000Z",
+            "reservation_date": rel_date(3, 11, 15),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Michele Santoro"],
             "staff_ids": [p_map["Marco Bianchi"]],
         },
         {
-            "reservation_date": "2026-10-06T14:00:00.000Z",
+            "reservation_date": rel_date(3, 14, 0),
             "duration_minutes": 30,
             "description": "description",
             "patient_id": p_map["Paola Marini"],
             "staff_ids": [p_map["Marco Bianchi"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-07T09:00:00.000Z",
+            "reservation_date": rel_date(5, 9, 0),
             "duration_minutes": 90,
             "description": "description",
             "patient_id": p_map["Daniele Sala"],
             "staff_ids": [p_map["Sofia Ricci"]],
         },
         {
-            "reservation_date": "2026-10-07T10:30:00.000Z",
+            "reservation_date": rel_date(5, 10, 30),
             "duration_minutes": 45,
             "description": "description",
             "patient_id": p_map["Laura Fiore"],
             "staff_ids": [p_map["Sofia Ricci"], p_map["Giulia Rossi"]],
         },
         {
-            "reservation_date": "2026-10-07T11:15:00.000Z",
+            "reservation_date": rel_date(5, 11, 15),
             "duration_minutes": 60,
             "description": "description",
             "patient_id": p_map["Elisa Coppola"],

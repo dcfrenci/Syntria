@@ -15,11 +15,6 @@ class Agenda:
         self.current_date = datetime.date.today()
         self.week_shift = 0
 
-    # async def reset(self):
-    #     self.doctor_id = None
-    #     self.week_shift = 0
-    #     await self._update_ui()
-
     def get_week_start(self):
         return (
             self.current_date
@@ -36,18 +31,16 @@ class Agenda:
 
     async def _update_ui(self):
         # 1. Fetch new data using the async API call
-        if self.doctor_id:
-            new_reservations = await AgendaClient.get_reservations_doctor_week(
-                self.doctor_id, self.get_week_start().isoformat()
-            )
-        else:
-            new_reservations = []
+        # Pass self.doctor_id even if it's None so the backend handles the default
+        new_reservations = await AgendaClient.get_reservations_week(
+            start_date=self.get_week_start().isoformat(),
+            doctor_id=self.doctor_id 
+        )
 
         # 2. Update the Calendar component (refreshes headers and events, ignores static grid)
         self.calendar.update_calendar(
             new_dates=self.get_current_week_dates(), new_reservations=new_reservations
         )
-
         # 3. Refresh the Date Navigator component below
         self.date_navigator.refresh()
 
@@ -132,27 +125,32 @@ async def edit_reservation(reservation_id: int):
 async def agenda_page():
     user_role = app.storage.user.get("role", "").lower()
 
-    all_users = await UsersClient.get_users()
-    doctors = {
-        u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
-        for u in all_users
-        if u.get("role", {}).get("name", "").lower() == "doctor"
-        and u.get("is_active", True)
-    }
-
     ui.label("Agenda").classes(Style.title())
 
-    # Doctor selection
-    with ui.row().classes(Style.row_center()):
+    if user_role in ["admin", "manager", "secretary"]:
+        all_users = await UsersClient.get_users()
+            
+        doctors = {
+            u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
+            for u in all_users
+            if u.get("role", {}).get("name", "").lower() == "doctor"
+            and u.get("is_active", True)
+        }
 
-        async def update_agenda(e):
-            if e.value:
-                await my_agenda.set_doctor(doctor_id=e.value)
+        # Doctor selection
+        with ui.row().classes(Style.row_center()):
 
-        if user_role in ["admin", "manager", "secretary", "doctor"]:
+            async def update_agenda(e):
+                if e.value:
+                    await my_agenda.set_doctor(doctor_id=e.value)
+
             ui.select(
                 label="Select doctor", options=doctors, on_change=update_agenda
             ).classes(f"max-w-1/3 {Style.p()}")
+    
+    if user_role in ["doctor"]:
+        user = await UsersClient.get_user_me()
+        await my_agenda.set_doctor(doctor_id=user.get("id", None))
 
     with ui.column().classes("w-full"):
         my_agenda.date_navigator()
@@ -164,6 +162,8 @@ async def agenda_page():
             day_width=130,
             reservations=[],
         )
+        
+    await my_agenda._update_ui()
 
     # Floating buttons
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):

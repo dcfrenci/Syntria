@@ -12,8 +12,7 @@ class UsersClient:
 
     @staticmethod
     async def get_user_me():
-        res = await APIClient.get(f"/users/me")
-        return res.get("users", []) if res else []
+        return await APIClient.get(f"/users/me")
 
     @staticmethod
     async def get_user(user_id: int):
