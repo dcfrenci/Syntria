@@ -400,12 +400,28 @@ def confirmation_modal(title: str, description: str, on_save_callback):
         ui.label(description).classes(Style.p())
 
         async def handle_cancel():
-            await on_save_callback(False)
-            dialog.close()
+            try:
+                await on_save_callback(False)
+            finally:
+                dialog.close()
 
         async def handle_confirm():
-            await on_save_callback(True)
-            dialog.close()
+            try:
+                await on_save_callback(True)
+            except Exception as e:
+                error_msg = str(e)
+                if hasattr(e, "response"):
+                    if e.response.status_code == 403:
+                        error_msg = "Forbidden request: Insufficient privileges."
+                    else:
+                        try:
+                            error_msg = e.response.json().get("detail", error_msg)
+                        except Exception:
+                            error_msg = e.response.text or error_msg
+                
+                ui.notify(f"Action failed: {error_msg}", type="negative", icon="warning")
+            finally:
+                dialog.close()
 
         with ui.row().classes(Style.row_end()):
             ui.button("Cancel", on_click=handle_cancel).props("outline")
