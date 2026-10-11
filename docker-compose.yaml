@@ -44,7 +44,7 @@ services:
     env_file:
       - .env
     # TODO Remove - Dev reload override (comment out in production to fall back to Dockerfile CMD)
-    command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $${FASTAPI_PORT} --reload"]
+    # command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port $${FASTAPI_PORT} --reload"]
     volumes:
       - ./api/app:/app/app
     ports:

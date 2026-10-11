@@ -147,6 +147,6 @@ ui.run(
     storage_secret="your_secure_random_secrets",
     port=int(os.getenv("NICEGUI_PORT", 8080)),
     host="0.0.0.0",
-    reload=True,
+    # reload=True,
     favicon="app/assets/icons/syntria_logo.svg",
 )

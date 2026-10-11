@@ -87,7 +87,7 @@ pip install -r scripts/requirements.txt
 ```
 Create your enviroment file by copying the provided example and adding your Tailscale Auth Key:
 ```bash
-cp .env-example .env
+cp .env-example.conf .env
 ```
 Edit `.env` and insert your `TS_AUTHKEY` generated from the Tailscale Admin Console
 
