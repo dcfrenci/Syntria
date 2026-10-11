@@ -5,35 +5,37 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 > **Legend**:
 > - :white_check_mark: Allowed / Permitted
 > - *(blank)* Denied / Restricted
-> - `*` Self-only access (e.g. current logged-in user profile)
+> - `*` Self-only access (e.g. current logged-in user profile, own patient/staff record)
 
 ---
 
 ## 1. Authentication & System Bootstrapping
 
-| Role          | POST `/api/v1/auth/token` | POST `/api/v1/users/bootstrap_user` | POST `/api/v1/users/bootstrap_role` |   GET `/health`    |
-| :------------ | :-----------------------: | :---------------------------------: | :---------------------------------: | :----------------: |
-| **Admin**     |    :white_check_mark:     |         :white_check_mark:          |         :white_check_mark:          | :white_check_mark: |
-| **Manager**   |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
-| **Secretary** |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
-| **Doctor**    |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
-| **Assistant** |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
-| **Employee**  |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
-| **Client**    |    :white_check_mark:     |                                     |                                     | :white_check_mark: |
+| Role          | POST `/api/v1/auth/token` | POST `/api/v1/users/admin` |   GET `/health`    |
+| :------------ | :-----------------------: | :------------------------: | :----------------: |
+| **Admin**     |    :white_check_mark:     |    :white_check_mark:¹     | :white_check_mark: |
+| **Manager**   |    :white_check_mark:     |                            | :white_check_mark: |
+| **Secretary** |    :white_check_mark:     |                            | :white_check_mark: |
+| **Doctor**    |    :white_check_mark:     |                            | :white_check_mark: |
+| **Assistant** |    :white_check_mark:     |                            | :white_check_mark: |
+| **Employee**  |    :white_check_mark:     |                            | :white_check_mark: |
+| **Client**    |    :white_check_mark:     |                            | :white_check_mark: |
+
+*¹ Accessible only when no users exist in the system (initial bootstrap).*
 
 ---
 
 ## 2. Users & Staff Management
 
-| Role          | GET `/api/v1/users/` | POST `/api/v1/users/` | GET `/api/v1/users/me` | GET `/api/v1/users/{id}` | PATCH `/api/v1/users/{id}` | DELETE `/api/v1/users/{id}` | GET `/api/v1/users/{id}/reservations` |
-| :------------ | :------------------: | :-------------------: | :--------------------: | :----------------------: | :------------------------: | :-------------------------: | :-----------------------------------: |
-| **Admin**     |  :white_check_mark:  |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:    |     :white_check_mark:     |     :white_check_mark:      |          :white_check_mark:           |
-| **Manager**   |  :white_check_mark:  |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:    |     :white_check_mark:     |                             |          :white_check_mark:           |
-| **Secretary** |  :white_check_mark:  |                       |   :white_check_mark:   |    :white_check_mark:    |                            |                             |          :white_check_mark:           |
-| **Doctor**    |                      |                       |   :white_check_mark:   |   :white_check_mark:*    |                            |                             |          :white_check_mark:*          |
-| **Assistant** |                      |                       |   :white_check_mark:   |                          |                            |                             |                                       |
-| **Employee**  |                      |                       |   :white_check_mark:   |                          |                            |                             |                                       |
-| **Client**    |                      |                       |                        |                          |                            |                             |                                       |
+| Role          | GET `/api/v1/users/` | POST `/api/v1/users/` | GET `/api/v1/users/me` | GET `/api/v1/users/{id}` | PATCH `/api/v1/users/{id}` | DELETE `/api/v1/users/{id}` | GET `/api/v1/users/reservations` |
+| :------------ | :------------------: | :-------------------: | :--------------------: | :----------------------: | :------------------------: | :-------------------------: | :------------------------------: |
+| **Admin**     |  :white_check_mark:  |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:    |     :white_check_mark:     |     :white_check_mark:      |        :white_check_mark:        |
+| **Manager**   |  :white_check_mark:  |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:    |     :white_check_mark:     |                             |        :white_check_mark:        |
+| **Secretary** |  :white_check_mark:  |                       |   :white_check_mark:   |    :white_check_mark:    |                            |                             |        :white_check_mark:        |
+| **Doctor**    |                      |                       |   :white_check_mark:   |   :white_check_mark:*    |                            |                             |       :white_check_mark:*        |
+| **Assistant** |                      |                       |   :white_check_mark:   |                          |                            |                             |       :white_check_mark:*        |
+| **Employee**  |                      |                       |   :white_check_mark:   |                          |                            |                             |       :white_check_mark:*        |
+| **Client**    |                      |                       |                        |                          |                            |                             |       :white_check_mark:*        |
 
 ---
 
@@ -86,7 +88,7 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Admin**     |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |      :white_check_mark:      |
 | **Manager**   |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |      :white_check_mark:      |
 | **Secretary** |  :white_check_mark:   |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
-| **Doctor**    |  :white_check_mark:*  |  :white_check_mark:*   |    :white_check_mark:*    |     :white_check_mark:*      |                              |
+| **Doctor**    |  :white_check_mark:*  |   :white_check_mark:   |    :white_check_mark:     |     :white_check_mark:      |                              |
 | **Assistant** |  :white_check_mark:*  |                        |    :white_check_mark:     |                             |                              |
 | **Employee**  |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
 | **Client**    |  :white_check_mark:*  |                        |    :white_check_mark:*    |                             |                              |
@@ -123,15 +125,15 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 
 ## 9. Print / Document Presets
 
-| Role          | GET `/api/v1/presets/` | POST `/api/v1/presets/` | GET `/api/v1/presets/{id}` | PATCH `/api/v1/presets/{id}` | DELETE `/api/v1/presets/{id}` |
-| :------------ | :--------------------: | :---------------------: | :------------------------: | :--------------------------: | :---------------------------: |
-| **Admin**     |   :white_check_mark:   |   :white_check_mark:    |     :white_check_mark:     |      :white_check_mark:      |      :white_check_mark:       |
-| **Manager**   |   :white_check_mark:   |   :white_check_mark:    |     :white_check_mark:     |      :white_check_mark:      |      :white_check_mark:       |
-| **Secretary** |   :white_check_mark:   |                         |     :white_check_mark:     |                              |                               |
-| **Doctor**    |   :white_check_mark:   |                         |     :white_check_mark:     |                              |                               |
-| **Assistant** |                        |                         |                            |                              |                               |
-| **Employee**  |                        |                         |                            |                              |                               |
-| **Client**    |                        |                         |                            |                              |                               |
+| Role          | GET `/api/v1/presets/` | GET `/api/v1/presets/active` | POST `/api/v1/presets/` | GET `/api/v1/presets/{id}` | PATCH `/api/v1/presets/{id}` | DELETE `/api/v1/presets/{id}` |
+| :------------ | :--------------------: | :--------------------------: | :---------------------: | :------------------------: | :--------------------------: | :---------------------------: |
+| **Admin**     |   :white_check_mark:   |      :white_check_mark:      |   :white_check_mark:    |     :white_check_mark:     |      :white_check_mark:      |      :white_check_mark:       |
+| **Manager**   |   :white_check_mark:   |      :white_check_mark:      |   :white_check_mark:    |     :white_check_mark:     |      :white_check_mark:      |      :white_check_mark:       |
+| **Secretary** |   :white_check_mark:   |      :white_check_mark:      |   :white_check_mark:    |     :white_check_mark:     |      :white_check_mark:      |                               |
+| **Doctor**    |   :white_check_mark:   |      :white_check_mark:      |                         |     :white_check_mark:     |                              |                               |
+| **Assistant** |                        |                              |                         |                            |                              |                               |
+| **Employee**  |                        |      :white_check_mark:      |                         |                            |                              |                               |
+| **Client**    |                        |      :white_check_mark:      |                         |                            |                              |                               |
 
 ---
 
@@ -161,8 +163,10 @@ This document maps all OpenAPI paths and HTTP methods against system roles (`Adm
 | **Employee**  |                                              |                                                |                                              |
 | **Client**    |                                              |                                                |                                              |
 
+---
 
-# NiceGUI Page Access
+## 12. NiceGUI Page Access
+
 | Role          |        Home        |       Agenda       |      Persons       |      Pricing       |  Customize Quote   |      Setting       |      Account       |
 | :------------ | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: | :----------------: |
 | **Admin**     | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark: |                    |
