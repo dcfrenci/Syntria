@@ -193,7 +193,7 @@ async def quote_detail(
         persons = {p["id"]: p for p in await PersonsClient.get_persons()}
         users = await UsersClient.get_users()
         if len(users) == 0:
-            users = [await UsersClient.get_user_me()]
+            users = await UsersClient.get_user_me()
         
         doctor_person_ids = {
             u["person"]["id"]
@@ -207,7 +207,6 @@ async def quote_detail(
             with ui.column():
                 ui.label("Select Doctor").classes(Style.h2())
                 with ui.card().classes("w-full"):
-                    # Only include persons that are in the doctor_person_ids set
                     names = {
                         k: f"{v['first_name']} {v['last_name']}"
                         for k, v in persons.items()
