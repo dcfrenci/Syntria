@@ -9,9 +9,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash
 from app.models import Role, User, Person, Reservation
 from app.routers.auth import get_current_user, RoleChecker
-from app.schemas.roles import RoleCreate, RoleResponse
 from app.schemas.users import (
-    SystemBootstrap,
     UserCreate,
     UserListResponse,
     UserResponse,
@@ -26,52 +24,6 @@ allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
 allow_all_staff = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
 )
-
-
-# ---------------------------------------------------------
-# Bootstrap Endpoints
-# ---------------------------------------------------------
-@router.post("/admin", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def bootstrap_admin(
-    payload: SystemBootstrap,
-    db: AsyncSession = Depends(get_db),
-):
-    """Initializes the system by creating the Admin role, person, and user atomically. Locked after first use."""
-    count = (await db.execute(select(func.count(User.id)))).scalar_one()
-    if count > 0:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="System already initialized."
-        )
-
-    # 1. Create Admin Role
-    role = Role(name=payload.role_name)
-    db.add(role)
-    await db.flush()
-
-    # 2. Create Admin Person
-    person = Person(
-        first_name=payload.first_name,
-        last_name=payload.last_name,
-        email=payload.email,
-        phone_number=payload.phone_number,
-        birth_date=payload.birth_date,
-    )
-    db.add(person)
-    await db.flush()
-
-    # 3. Create Admin User
-    new_user = User(
-        person_id=person.id,
-        role_id=role.id,
-        hashed_password=get_password_hash(payload.password),
-        is_active=True,
-    )
-    db.add(new_user)
-    await db.flush()
-
-    await db.refresh(new_user, ["person", "role"])
-    return new_user
-
 
 # ---------------------------------------------------------
 # User (Staff Account) CRUD Endpoints

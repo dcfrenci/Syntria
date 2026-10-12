@@ -13,7 +13,7 @@ from seed_data import (
     get_presets,
 )
 
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
 
 
 def post_data(endpoint: str, data: list, token: str):
@@ -40,35 +40,10 @@ def post_data(endpoint: str, data: list, token: str):
     return ids
 
 
-def bootstrap_system():
-    """Bootstraps the admin role, admin person, and admin user in a single request."""
-    print("--- Bootstrapping System ---")
-
-    payload = {
-        "role_name": "Admin",
-        "first_name": "Admin",
-        "last_name": "System",
-        "email": "admin@email.com",
-        "phone_number": "0000000000",
-        "birth_date": "0001-01-01",
-        "password": "asTf82#1"
-    }
-
-    response = requests.post(f"{BASE_URL}/users/admin", json=payload)
-    print(f"Bootstrap System Status: {response.status_code}")
-    
-    if response.status_code not in [200, 201, 403]:
-        print(f"Error: {response.text}")
-    elif response.status_code == 403:
-        print("System already bootstrapped. Proceeding...")
-    
-    print("----------------------------\n")
-
-
 def auth():
     """Logs in with the admin credentials and returns the access token."""
     print("--- Authenticating ---")
-    login_data = {"username": "admin@email.com", "password": "asTf82#1"}
+    login_data = {"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
     response = requests.post(f"{BASE_URL}/auth/token", data=login_data)
 
     if response.status_code == 200:
@@ -162,10 +137,6 @@ if __name__ == "__main__":
 
     print("Starting database population...\n")
 
-    # 1. Bootstrap the core admin dependencies
-    bootstrap_system()
-
-    # 2. Authenticate to get the token
     token = auth()
 
     if token:

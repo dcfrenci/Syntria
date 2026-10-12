@@ -1,19 +1,7 @@
-from datetime import datetime, date
-from pydantic import BaseModel, ConfigDict, Field, EmailStr
+from datetime import datetime
+from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.persons import PersonResponse
 from app.schemas.roles import RoleResponse
-
-
-class SystemBootstrap(BaseModel):
-    role_name: str = Field(
-        default="Admin", description="Name of the initial admin role"
-    )
-    first_name: str = Field(..., min_length=1, max_length=100)
-    last_name: str = Field(..., min_length=1, max_length=100)
-    email: EmailStr
-    password: str = Field(..., min_length=8)
-    phone_number: str | None = Field(default=None, max_length=20)
-    birth_date: date | None = None
 
 
 class UserBase(BaseModel):

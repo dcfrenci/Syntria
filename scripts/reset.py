@@ -1,13 +1,13 @@
 import os
 import requests
 
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
 
 
 def auth():
     """Logs in with the admin credentials and returns the access token."""
     print("--- Authenticating ---")
-    login_data = {"username": "admin@email.com", "password": "asTf82#1"}
+    login_data = {"username": ADMIN_EMAIL, "password": ADMIN_PASSWORD}
 
     response = requests.post(f"{BASE_URL}/auth/token", data=login_data)
 
@@ -95,14 +95,14 @@ def reset_database(token: str):
     print("\nCleaning up Users...")
     users = fetch_all("users", token, "users")
     for u in users:
-        if u["person"]["email"] != "admin@email.com":
+        if u["person"]["email"] != ADMIN_EMAIL:
             delete_item("users", u["id"], token)
 
     # 7. Delete Persons (Keep Admin)
     print("\nCleaning up Persons...")
     persons = fetch_all("persons", token, "persons")
     for p in persons:
-        if p["email"] != "admin@email.com":
+        if p["email"] != ADMIN_EMAIL: 
             delete_item("persons", p["id"], token)
 
 

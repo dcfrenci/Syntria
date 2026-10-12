@@ -3,3 +3,6 @@
 .env
 frontend/.nicegui/
 scripts/__pycache__
+backups/ 
+backup/rclone/ 
+backup-key.txt

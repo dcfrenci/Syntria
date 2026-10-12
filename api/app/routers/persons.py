@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models import User, Person, ReminderPreference
 from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.persons import (
@@ -74,7 +75,7 @@ async def get_persons(
         )
         
     if current_user.role.name.lower() != "admin":
-        filters.append(Person.email != "admin@email.com")
+        filters.append(Person.email != settings.ADMIN_EMAIL)
 
     query = select(Person).options(selectinload(Person.reminder_preference))
     count_query = select(func.count(Person.id))

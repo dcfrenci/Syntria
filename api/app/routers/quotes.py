@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.routers.auth import get_current_user, RoleChecker
 from app.models import Quote, QuoteItem, Person, User, Item
 from app.schemas.quotes import (
@@ -131,9 +132,9 @@ async def get_quotes(
         count_query = count_query.where(Quote.patient_id == patient_id)
 
     if role != "admin":
-        query = query.where(~Quote.patient.has(Person.email == "admin@email.com"))
-        count_query = count_query.where(~Quote.patient.has(Person.email == "admin@email.com"))
-
+        query = query.where(~Quote.patient.has(Person.email == settings.ADMIN_EMAIL))
+        count_query = count_query.where(~Quote.patient.has(Person.email == settings.ADMIN_EMAIL))
+        
     total = (await db.execute(count_query)).scalar_one()
     quotes = (await db.execute(query.offset(skip).limit(limit))).scalars().all()
 
