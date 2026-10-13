@@ -15,7 +15,7 @@ class AgendaClient:
         if doctor_id is not None:
             query_params["user_id"] = doctor_id
 
-        result = await APIClient.get("/reservations/", params=query_params)
+        result = await APIClient.get("/users/reservations", params=query_params)
         return result.get("reservations", []) if result else []
 
     @staticmethod

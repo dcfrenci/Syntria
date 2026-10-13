@@ -3,7 +3,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, noload
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -115,7 +115,11 @@ async def get_quotes(
     if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
     
-    query = select(Quote).order_by(Quote.created_at.desc())
+    query = (
+        select(Quote)
+        .options(noload(Quote.quote_items))
+        .order_by(Quote.created_at.desc())
+    )
     count_query = select(func.count(Quote.id))
     
     role = current_user.role.name.lower()

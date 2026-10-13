@@ -8,33 +8,46 @@ from app.schemas.items import ItemResponse
 
 QuoteStatus = Literal["Draft", "Pending", "Accepted", "Rejected"]
 
+
 class QuoteItemBase(BaseModel):
     item_id: int = Field(..., description="ID of the selected Item/Service")
     quantity: int = Field(default=1, gt=0)
     discount: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
-    teeth: list[int] | None = Field(default=None, description="List of teeth for this specific item")
+    teeth: list[int] | None = Field(
+        default=None, description="List of teeth for this specific item"
+    )
+
 
 class QuoteItemCreate(QuoteItemBase):
     pass
+
 
 class QuoteItemResponse(QuoteItemBase):
     id: int
     unit_price: Decimal
     item: ItemResponse
-    
+
     model_config = ConfigDict(from_attributes=True)
+
 
 class QuoteBase(BaseModel):
     valid_until: date | None = None
 
+
 class QuoteCreate(QuoteBase):
     patient_id: int
-    staff_id: int | None = Field(default=None, description="The dentist creating the quote")
-    items: list[QuoteItemCreate] = Field(..., min_length=1, description="List of services in this quote")
+    staff_id: int | None = Field(
+        default=None, description="The dentist creating the quote"
+    )
+    items: list[QuoteItemCreate] = Field(
+        ..., min_length=1, description="List of services in this quote"
+    )
+
 
 class QuoteUpdate(BaseModel):
     status: QuoteStatus | None = None
     valid_until: date | None = None
+
 
 class QuoteResponse(QuoteBase):
     id: int
@@ -48,6 +61,27 @@ class QuoteResponse(QuoteBase):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class PersonBrief(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QuoteSummary(BaseModel):
+    id: int
+    status: QuoteStatus
+    total_amount: Decimal
+    valid_until: date | None = None
+    patient: PersonBrief
+    staff: PersonBrief | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class QuoteListResponse(BaseModel):
     total: int
-    quotes: list[QuoteResponse]
+    quotes: list[QuoteSummary]

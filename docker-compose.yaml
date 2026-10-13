@@ -1,12 +1,24 @@
 services:
   db:
     image: ${POSTGRES_IMAGE}
-    container_name: ${POSTGRES_CONTAINER_NAME}
-    restart: always
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       PGPORT: ${POSTGRES_PORT}
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=30
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -14,22 +26,29 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-    networks:
-      - syntria
+    stop_grace_period: 60s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    networks: [syntria]
 
   db-web:
     image: ${PGADMIN_IMAGE}
-    container_name: ${PGADMIN_CONTAINER_NAME}
-    restart: always
-    env_file:
-      - .env
+    profiles: ["tools"]
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      PGADMIN_LISTEN_PORT: ${PGADMIN_LISTEN_PORT}
     expose:
       - "${PGADMIN_LISTEN_PORT}"
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - syntria
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 384M }
+    networks: [syntria]
 
   api:
     build:
@@ -37,25 +56,32 @@ services:
       dockerfile: Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
-    container_name: ${FASTAPI_CONTAINER_NAME}
-    restart: always
-    env_file:
-      - .env
-    volumes:
-      - ./api/app:/app/app
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      FASTAPI_PORT: ${FASTAPI_PORT}
     expose:
       - "${FASTAPI_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${FASTAPI_PORT}/health')\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${FASTAPI_PORT}/health', timeout=3)\""]
       interval: 15s
       timeout: 5s
       retries: 5
-      start_period: 5s
+      start_period: 30s
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - syntria
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 384M }
+    networks: [syntria]
 
   frontend:
     build:
@@ -63,44 +89,56 @@ services:
       dockerfile: Dockerfile
       args:
         PYTHON_VERSION: ${PYTHON_VERSION}
-    container_name: ${NICEGUI_CONTAINER_NAME}
-    restart: always
-    env_file:
-      - .env
+    restart: unless-stopped
+    environment:
+      API_BASE_URL: ${API_BASE_URL}
+      NICEGUI_PORT: ${NICEGUI_PORT}
+      NICEGUI_STORAGE_SECRET: ${NICEGUI_STORAGE_SECRET}
+      NICEGUI_STORAGE_PATH: /data/nicegui
+      NICEGUI_RELOAD: "false"
     volumes:
-      - ./frontend:/app
+      - nicegui_data:/data/nicegui
     expose:
       - "${NICEGUI_PORT}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', ${NICEGUI_PORT}), 3)"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       api:
         condition: service_healthy
-    networks:
-      - syntria
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512M }
+    networks: [syntria]
 
   nginx:
     image: ${NGINX_IMAGE}
-    container_name: ${NGINX_CONTAINER_NAME}
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
-      - api
-      - db-web
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/nginx-health || exit 1"]
       interval: 20s
       timeout: 5s
       retries: 3
-    networks:
-      - syntria
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 64M }
+    networks: [syntria]
 
   backup:
     build: 
       context: ./backup
       dockerfile: Dockerfile
       args:
-        PYTHON_VERSION: ${PYTHON_VERSION}
+        POSTGRES_IMAGE: ${POSTGRES_IMAGE}
     restart: unless-stopped
     user: "${BACKUP_UID:-1000}:${BACKUP_GID:-1000}"
     environment:
@@ -120,51 +158,51 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    # cap_drop: [ALL]
-    # security_opt:
-    #   - no-new-privileges:true
+    cap_drop: [ALL]
     depends_on:
       db:
         condition: service_healthy
     healthcheck:
-      # unhealthy if there is no backup newer than interval + 2h
+      # interval 10m so the first check happens soon; unhealthy if no backup newer than interval + 2h
       test: ["CMD-SHELL", "find /backups -maxdepth 1 -name 'syntria-*' -mmin -$$((BACKUP_INTERVAL_HOURS*60+120)) | grep -q ."]
-      interval: 1h
+      interval: 10m
       timeout: 10s
       retries: 1
-      start_period: 15m
-    networks:
-      - syntria
+      start_period: 2m
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 128M }
+    networks: [syntria]
 
   tailscale:
     image: ${TAILSCALE_IMAGE}
     container_name: ${TAILSCALE_CONTAINER_NAME}
     hostname: ${TAILSCALE_HOSTNAME}
-    # [step1] Only started when COMPOSE_PROFILES=tailscale (production). Local runs skip it.
     profiles: ["tailscale"]
     environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
+      TS_AUTHKEY: ${TS_AUTHKEY}
+      TS_STATE_DIR: /var/lib/tailscale
     volumes:
       - tailscale_data:/var/lib/tailscale
     cap_add:
       - net_admin
       - net_raw
-    restart: always
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "tailscale status --peers=false || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
-    networks:
-      - syntria
+    deploy:
+      resources:
+        limits: { cpus: "0.25", memory: 128M }
+    networks: [syntria]
 
 volumes:
   postgres_data:
-    driver: local
+  nicegui_data:
   tailscale_data:
-    driver: local
 
 networks:
   syntria:

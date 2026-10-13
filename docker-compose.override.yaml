@@ -1,5 +1,20 @@
 services:
   nginx:
     ports:
-      - "127.0.0.1:8080:80"   # public tier   -> http://localhost:8080  (the app)
-      - "127.0.0.1:8081:81"   # private tier  -> http://localhost:8081  (/api/, /pgadmin/)
+      - "127.0.0.1:8080:80"
+      - "127.0.0.1:8081:81"
+
+  api:
+    volumes:
+      - ./api/app:/app/app
+      - ./api/migrations:/app/migrations
+    command:
+      - sh
+      - -c
+      - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port $${FASTAPI_PORT} --proxy-headers --reload --reload-dir /app/app
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+    environment:
+      NICEGUI_RELOAD: "true"

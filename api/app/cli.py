@@ -14,7 +14,7 @@ import sys
 from sqlalchemy import select
 
 from app.core.config import settings
-from app.core.database import AsyncSessionLocal, Base, engine
+from app.core.database import AsyncSessionLocal, engine
 from app.core.security import get_password_hash
 from app.models import Person, ReminderPreference, Role, User  # noqa: F401 (registers all tables)
 
@@ -52,9 +52,7 @@ async def seed_reference_data(db) -> None:
 
 
 async def bootstrap(args) -> None:
-    async with engine.begin() as conn:  # replaced by Alembic in step 2
-        await conn.run_sync(Base.metadata.create_all)
-
+    
     async with AsyncSessionLocal() as db:
         await seed_reference_data(db)
         admin_role = (await db.execute(select(Role).where(Role.name == "Admin"))).scalar_one()
@@ -64,8 +62,9 @@ async def bootstrap(args) -> None:
         ).first()
         if existing:
             await db.commit()  # keep the reference data
-            sys.exit("An admin already exists. Use `set-password` to reset its password.")
-
+            print("An admin already exists. Nothing to do (use `set-password` to reset it).")
+            return
+        
         password = read_password()
         email = settings.ADMIN_EMAIL
         person = (await db.execute(select(Person).where(Person.email == email))).scalar_one_or_none()

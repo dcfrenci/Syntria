@@ -1,7 +1,6 @@
 import io
 import json
 import datetime
-import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy import select, delete
@@ -16,8 +15,12 @@ router = APIRouter(prefix="/import_export", tags=["Import & Export"])
 
 allow_admin_mgr = RoleChecker(["admin", "manager"])
 
+def _pd():
+    import pandas as pd
+    return pd
 
 def parse_date(val):
+    pd = _pd()
     if not val or pd.isna(val):
         return None
     if isinstance(val, str):
@@ -29,6 +32,7 @@ def parse_date(val):
 
 
 def parse_datetime(val):
+    pd = _pd()
     if not val or pd.isna(val):
         return None
     if isinstance(val, str):
@@ -47,6 +51,7 @@ async def export_data(
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Exports structured relationships to a flat CSV by serializing entire nested objects as JSON."""
+    pd = _pd()
     ids = payload.get("ids", [])
     if not ids:
         raise HTTPException(400, "No IDs provided for export")
@@ -196,7 +201,10 @@ async def validate_import(
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Parses a CSV upload and checks the database for conflicts and missing relations from nested objects."""
+    pd = _pd()
     contents = await file.read()
+    if len(contents) > 5_000_000:
+        raise HTTPException(413, "CSV too large (max 5 MB)")
     try:
         df = pd.read_csv(io.BytesIO(contents))
         df = df.where(

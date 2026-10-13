@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
 from app.core.database import get_db
@@ -24,6 +24,7 @@ allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
 allow_all_staff = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
 )
+
 
 # ---------------------------------------------------------
 # User (Staff Account) CRUD Endpoints
@@ -111,6 +112,58 @@ async def list_users(
     )
 
     return {"total": total, "users": users}
+
+
+@router.get("/reservations", response_model=ReservationListResponse)
+async def get_reservations(
+    start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD). Default: the Mon-Sun week of start_date"),
+    user_id: Optional[int] = Query(None, description="PERSON id to look up (doctor or patient). Default: the logged-in user's person."),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Reservations where the target person is staff or patient."""
+    role = current_user.role.name.lower()
+    privileged_roles = ["admin", "manager", "secretary"]
+    standard_roles = ["doctor", "assistant", "employee", "client"]
+
+    if role not in privileged_roles + standard_roles:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient privileges.")
+
+    target_person_id = user_id if user_id is not None else current_user.person_id
+
+    if target_person_id != current_user.person_id:
+        if role not in privileged_roles:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, detail="You can only view your own reservations."
+            )
+        if await db.get(Person, target_person_id) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Target person not found.")
+
+    if end_date is None:
+        active_start = start_date - timedelta(days=start_date.weekday())
+        active_end = active_start + timedelta(days=6)
+    else:
+        active_start, active_end = start_date, end_date
+
+    # explicit tz-aware bounds, end exclusive
+    range_start = datetime.combine(active_start, time.min, tzinfo=timezone.utc)
+    range_end = datetime.combine(active_end + timedelta(days=1), time.min, tzinfo=timezone.utc)
+
+    query = (
+        select(Reservation)
+        .where(
+            or_(
+                Reservation.staff.any(id=target_person_id),
+                Reservation.patient_id == target_person_id,
+            ),
+            Reservation.reservation_date >= range_start,
+            Reservation.reservation_date < range_end,
+        )
+        .order_by(Reservation.reservation_date)
+    )
+    reservations = (await db.execute(query)).scalars().unique().all()
+    return {"total": len(reservations), "reservations": reservations}
 
 
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -204,131 +257,3 @@ async def delete_user(
 
     await db.delete(user)
     return None
-
-@router.get("/reservations", response_model=ReservationListResponse)
-async def get_reservations(
-    start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    user_id: Optional[int] = Query(None, description="Optional ID of the user to look up. Defaults to current user."),
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Retrieve reservations for the logged-in user, or a specific user if requested by an admin."""
-
-    role = current_user.role.name.lower()
-    privileged_roles = ["admin", "manager", "secretary"]
-    standard_roles = ["doctor", "assistant", "employee", "client"]
-
-    if role not in privileged_roles + standard_roles:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
-        )
-
-    # 1. Determine which ID we are looking up
-    # If the user didn't provide an ID, assume they want their own schedule
-    target_id = user_id if user_id is not None else current_user.id
-
-    # 2. Access Control Check
-    # If a standard user is trying to look up an ID that isn't theirs, block it
-    if target_id != current_user.id and role not in privileged_roles:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="You can only view your own reservations."
-        )
-
-    # 3. Verify target user exists (only strictly necessary if user_id was provided)
-    if target_id != current_user.id:
-        user_stmt = select(User).where(User.id == target_id)
-        result = await db.execute(user_stmt)
-        user = result.scalars().first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Target user not found")
-
-    # 4. Determine date range
-    if not end_date:
-        active_start = start_date - timedelta(days=start_date.weekday())
-        active_end = active_start + timedelta(days=6)
-    else:
-        active_start = start_date
-        active_end = end_date
-
-    # 5. Build and execute the async query for the target_id
-    query = select(Reservation).where(
-        or_(
-            Reservation.staff.any(id=target_id),
-            Reservation.patient_id == target_id
-        )
-    )
-
-    query = query.where(Reservation.reservation_date >= active_start)
-    query = query.where(Reservation.reservation_date < active_end + timedelta(days=1))
-
-    result = await db.execute(query)
-    reservations = result.scalars().unique().all()
-
-    return {"total": len(reservations), "reservations": reservations}
-
-
-
-# @router.get("/{user_id}/reservations", response_model=ReservationListResponse)
-# async def get_user_reservations(
-#     user_id: int,
-#     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
-#     end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-#     db: AsyncSession = Depends(get_db),
-#     current_user: User = Depends(get_current_user),
-# ):
-#     """Retrieve reservations assigned to a specific staff member or patient."""
-
-#     role = current_user.role.name.lower()
-#     privileged_roles = ["admin", "manager", "secretary"]
-#     standard_roles = ["doctor", "assistant", "employee", "client"]
-    
-#     print(f"user_id: {user_id}, current_user_id: {current_user.id}", flush=True)
-
-#     if role not in privileged_roles + standard_roles:
-#         raise HTTPException(
-#             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
-#         )
-        
-#     # Standard users can only view their own reservations
-#     if role in standard_roles and current_user.id != user_id:
-#         raise HTTPException(
-#             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
-#         )
-
-#     # 1. Verify user exists using async syntax
-#     user_stmt = select(User).where(User.id == user_id)
-#     result = await db.execute(user_stmt)
-#     user = result.scalars().first()
-
-#     if not user:
-#         raise HTTPException(status_code=404, detail="User not found")
-
-#     # 2. Determine date range
-#     if not end_date:
-#         active_start = start_date - timedelta(days=start_date.weekday())
-#         active_end = active_start + timedelta(days=6)
-#     else:
-#         active_start = start_date
-#         active_end = end_date
-
-#     # 3. Build and execute the async query
-#     # Match if the user is either assigned as staff OR is the patient
-#     query = select(Reservation).where(
-#         or_(
-#             Reservation.staff.any(id=user_id),
-#             Reservation.patient_id == user_id
-#         )
-#     )
-
-#     # Filter >= start at midnight
-#     query = query.where(Reservation.reservation_date >= active_start)
-
-#     # Filter < the day AFTER the end date
-#     query = query.where(Reservation.reservation_date < active_end + timedelta(days=1))
-
-#     # Execute and fetch all results
-#     result = await db.execute(query)
-#     reservations = result.scalars().unique().all() # Add .unique() when using joined queries/any()
-
-#     return {"total": len(reservations), "reservations": reservations}

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy.orm import defer
 
 from app.core.database import get_db
 from app.models import User
@@ -47,7 +48,11 @@ async def get_presets(
     limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(allow_read),
 ):
-    query = select(Preset).order_by(Preset.created_at.desc())
+    query = (
+        select(Preset)
+        .options(defer(Preset.elements), defer(Preset.margins))
+        .order_by(Preset.created_at.desc())
+    )
     count_query = select(func.count(Preset.id))
 
     total = (await db.execute(count_query)).scalar_one()

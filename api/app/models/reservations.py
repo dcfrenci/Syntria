@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, func, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -11,14 +11,16 @@ reservation_staff_m2m = Table(
     Base.metadata,
     Column("reservation_id", ForeignKey("reservations.id", ondelete="CASCADE"), primary_key=True),
     Column("person_id", ForeignKey("persons.id", ondelete="CASCADE"), primary_key=True),
+    Index("ix_reservation_staff_person_id", "person_id"),
 )
+
 
 class Reservation(Base):
     __tablename__ = "reservations"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     patient_id: Mapped[int] = mapped_column(ForeignKey("persons.id", ondelete="CASCADE"), index=True)
-    reservation_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reservation_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     duration_minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
 

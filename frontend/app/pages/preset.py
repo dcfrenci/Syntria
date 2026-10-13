@@ -443,7 +443,7 @@ def builder_ui(state: QuoteBuilderState):
         except Exception:
             pass
 
-    ui.timer(0.2, auto_sync_size)
+    ui.timer(0.5, auto_sync_size)
 
     # --- REFRESHABLE UI COMPONENTS ---
     @ui.refreshable

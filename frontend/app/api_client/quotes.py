@@ -3,9 +3,21 @@ from api_client.base import APIClient
 class QuotesClient:
     @staticmethod
     async def get_quotes():
-        """Fetches all quotes."""
-        result = await APIClient.get("/quotes/")
-        return result.get("quotes", []) if result else []
+        """Fetches all quotes, paging through the API's 100-per-page limit."""
+        all_quotes = []
+        skip, limit = 0, 100
+        while True:
+            result = await APIClient.get("/quotes/", params={"skip": skip, "limit": limit})
+            if not result:
+                break
+            batch = result.get("quotes", [])
+            if not batch:
+                break
+            all_quotes.extend(batch)
+            skip += limit
+            if skip >= result.get("total", 0):
+                break
+        return all_quotes
     
     @staticmethod
     async def get_quote_with_id(id: int):

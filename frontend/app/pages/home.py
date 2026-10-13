@@ -35,20 +35,24 @@ async def quotes():
     with ui.column().classes("w-full"):
         ui.label("Quote").classes(Style.title())
 
+        def full_name(person: dict | None) -> str:
+            if not person:
+                return "-"
+            return f"{person.get('first_name', '')} {person.get('last_name', '')}".strip() or "-"
+
         async def load_quotes():
             row_quotes = await QuotesClient.get_quotes()
-            quotes = [
+            return [
                 {
                     "id": quote["id"],
-                    "name": f"{quote['patient']['first_name']} {quote['patient']['last_name']}",
+                    "name": full_name(quote.get("patient")),
                     "created_at": datetime.fromisoformat(quote["created_at"])
                     .date()
                     .strftime("%d/%m/%Y"),
-                    "staff": f"{quote['staff']['first_name']} {quote['staff']['last_name']}",
+                    "staff": full_name(quote.get("staff")),
                 }
                 for quote in row_quotes
             ]
-            return quotes
 
         def check_selected() -> bool:
             if not table_quotes.selected:
@@ -118,14 +122,14 @@ async def quotes():
                     "sortable": True,
                 },
                 {
-                    "date": "date",
+                    "name": "date",
                     "label": "Date",
                     "field": "created_at",
                     "align": "left",
                     "sortable": True,
                 },
                 {
-                    "staff": "staff",
+                    "name": "staff",
                     "label": "Doctor",
                     "field": "staff",
                     "align": "left",
@@ -679,7 +683,7 @@ async def quote_edit(id: int):
             id=id,
             date_selected={"date": quote["valid_until"]},
             person_selected={"patient_id": quote["patient"]["id"]},
-            staff_selected={"staff_id": quote["staff"]["id"]},
+            staff_selected={"staff_id": (quote.get("staff") or {}).get("id")},
             services_selected=services_selected,
         )
     except Exception as e:

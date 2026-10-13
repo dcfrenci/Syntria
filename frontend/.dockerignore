@@ -1,0 +1,6 @@
+.nicegui
+__pycache__
+*.pyc
+.env
+.git
+*.md

@@ -12,6 +12,7 @@ sed -e "s|^POSTGRES_USER=.*|POSTGRES_USER=syntria|" \
     -e "s|^SECRET_KEY=.*|SECRET_KEY=$(rand)$(rand)|" \
     -e "s|^BACKUP_UID=.*|BACKUP_UID=$(id -u)|" \
     -e "s|^BACKUP_GID=.*|BACKUP_GID=$(id -g)|" \
+    -e "s|^NICEGUI_STORAGE_SECRET=.*|NICEGUI_STORAGE_SECRET=$(rand)$(rand)|" \
     .env-example.conf > .env
 
 mkdir -p backups backup/rclone          # must be owned by you, not created by Docker as root

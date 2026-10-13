@@ -9,13 +9,8 @@ from app.routers import items, users, categories, persons, auth, reservations, q
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Create tables if they do not exist (useful for development)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        
+    # Schema is managed by Alembic (run by the container command before uvicorn starts)
     yield
-        
-    # Shutdown: Cleanly close connection pool
     await engine.dispose()
 
 app = FastAPI(

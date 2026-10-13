@@ -1,16 +1,12 @@
 import os
+import sys
 import requests
 from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
 
 # Users extracted directly from seed_data.py
 TEST_USERS = [
     # Active Users
-    {
-        "role": "Admin", 
-        "email": ADMIN_EMAIL, 
-        "password": ADMIN_PASSWORD, 
-        "active": True
-    },
+    {"role": "Admin", "email": ADMIN_EMAIL, "password": ADMIN_PASSWORD, "active": True},
     {
         "role": "Manager",
         "email": "matteo.b@gmail.com",
@@ -110,10 +106,14 @@ EXPECTED_ALLOWED = {
     ("GET", "/users/1"): ["Admin", "Manager", "Secretary"],
     ("PATCH", "/users/1"): ["Admin", "Manager"],
     ("DELETE", "/users/1"): ["Admin"],
-    ("GET", "/users/1/reservations?start_date=2026-01-01"): [
+    ("GET", "/users/reservations?start_date=2026-01-01"): [
         "Admin",
         "Manager",
         "Secretary",
+        "Doctor",
+        "Assistant",
+        "Employee",
+        "Client",
     ],
     ("GET", "/roles/"): ["Admin", "Manager"],
     ("POST", "/roles/"): ["Admin"],
@@ -146,6 +146,7 @@ EXPECTED_ALLOWED = {
         "Secretary",
         "Doctor",
         "Assistant",
+        "Employee",
         "Client",
     ],
     ("POST", "/quotes/"): ["Admin", "Manager", "Secretary", "Doctor"],
@@ -191,7 +192,7 @@ EXPECTED_ALLOWED = {
     ("PATCH", "/categories/1"): ["Admin", "Manager"],
     ("DELETE", "/categories/1"): ["Admin", "Manager"],
     ("GET", "/presets/"): ["Admin", "Manager", "Secretary", "Doctor"],
-    ("POST", "/presets/"): ["Admin", "Manager"],
+    ("POST", "/presets/"): ["Admin", "Manager", "Secretary"],
     ("GET", "/presets/1"): ["Admin", "Manager", "Secretary", "Doctor"],
     ("PATCH", "/presets/1"): ["Admin", "Manager"],
     ("DELETE", "/presets/1"): ["Admin", "Manager"],
@@ -244,7 +245,7 @@ def test_all_endpoints(token: str, role_name: str):
         ("GET", "/users/1", None, None),
         ("PATCH", "/users/1", {}, None),
         ("DELETE", "/users/1", None, None),
-        ("GET", "/users/1/reservations?start_date=2026-01-01", None, None),
+        ("GET", "/users/reservations?start_date=2026-01-01", None, None),
         # 3. Roles
         ("GET", "/roles/", None, None),
         ("POST", "/roles/", {"name": "TestRole"}, None),
@@ -316,7 +317,7 @@ def test_all_endpoints(token: str, role_name: str):
         is_allowed = role_name in EXPECTED_ALLOWED.get((method, path), [])
 
         if path == "/health":
-            url = f"http://localhost:8000{path}"
+            url = f"{BASE_URL}{path}"
             res_callable = lambda: requests.get(url)
         else:
             url = f"{BASE_URL}{path}"
@@ -346,7 +347,6 @@ def test_all_endpoints(token: str, role_name: str):
 
             # Evaluate correctness
             is_correct = False
-            
 
             if "/users/admin" in path:
                 expected_desc = "403/422"
@@ -441,6 +441,9 @@ def main():
 
     for user, s in zip(TEST_USERS, score):
         print(f"| {user['role']:<22} | {s[0]:<15} | {s[1]:<13} | {s[2]:>7.2f}% |")
+
+    failed = [u["role"] for u, s in zip(TEST_USERS, score) if s[1] > 0]
+    sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":

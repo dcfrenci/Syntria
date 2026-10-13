@@ -144,9 +144,10 @@ def settings_route():
 # Initialize the UI server
 ui.run(
     title="Syntria",
-    storage_secret="your_secure_random_secrets",
+    storage_secret=os.environ["NICEGUI_STORAGE_SECRET"],
     port=int(os.getenv("NICEGUI_PORT", 8080)),
     host="0.0.0.0",
-    # reload=True,
+    reload=os.getenv("NICEGUI_RELOAD", "false").lower() == "true",
+    show=False,
     favicon="app/assets/icons/syntria_logo.svg",
 )
