@@ -1,7 +1,0 @@
-CONTAINER ID   NAME                 CPU %     MEM USAGE / LIMIT   MEM %     NET I/O           BLOCK I/O         PIDS
-5203b475489d   syntria-frontend-1   0.28%     124.9MiB / 512MiB   24.40%    64.5kB / 752kB    1.92MB / 4.1kB    14
-5f65b2c7ab56   syntria-nginx-1      0.02%     21.55MiB / 64MiB    33.67%    804kB / 803kB     8.24MB / 12.3kB   17
-eb9153df0477   syntria-backup-1     0.00%     0B / 0B             0.00%     0B / 0B           0B / 0B           0
-dd514f2b0e15   syntria-db-web-1     0.03%     310.6MiB / 384MiB   80.88%    9.75kB / 126B     111MB / 19.5MB    7
-5fec4612ce20   syntria-api-1        0.25%     96.67MiB / 384MiB   25.17%    81.2kB / 90.3kB   184kB / 0B        9
-bb8f0499311a   syntria-db-1         0.01%     27.47MiB / 512MiB   5.37%     143kB / 80.9kB    12.3kB / 57MB     7
