@@ -239,6 +239,10 @@ class UserModal:
         if not self.user_id and not self.user_data["password"]:
             ui.notify("Password is required for new users.", type="warning")
             return
+        pw = self.user_data["password"]
+        if pw and not (12 <= len(pw) and len(pw.encode("utf-8")) <= 72):
+            ui.notify("Password must be at least 12 characters (max 72 bytes).", type="warning")
+            return
             
         # Match validation check
         if self.user_data["password"] != self.password_confirm:

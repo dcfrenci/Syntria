@@ -18,7 +18,7 @@ allow_admin = RoleChecker(["admin"])
 
 @router.get("/", response_model=list[RoleResponse])
 async def list_roles(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
     result = await db.execute(select(Role).order_by(Role.name))
@@ -33,7 +33,7 @@ async def list_roles(
 @router.post("/", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
 async def create_role(
     payload: RoleCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin),
 ):
     existing = await db.execute(select(Role).where(Role.name.ilike(payload.name)))

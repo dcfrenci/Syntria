@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     # Identifier of the system admin account (the password is never stored in config)
     ADMIN_EMAIL: str
+    ENABLE_DOCS: bool = False
+    LOG_LEVEL: str = "INFO"
 
     @field_validator("SECRET_KEY")
     @classmethod

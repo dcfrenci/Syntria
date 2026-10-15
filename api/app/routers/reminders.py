@@ -20,7 +20,7 @@ allow_admin = RoleChecker(["admin"])
 
 @router.get("/", response_model=list[ReminderPreferenceResponse])
 async def list_reminder_preferences(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_read),
 ):
     result = await db.execute(
@@ -34,7 +34,7 @@ async def list_reminder_preferences(
 )
 async def create_reminder_preference(
     payload: ReminderPreferenceCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin),
 ):
     query = select(ReminderPreference).where(

@@ -13,7 +13,7 @@ from seed_data import (
     get_presets,
 )
 
-from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD, require_demo_password
 
 
 def post_data(endpoint: str, data: list, token: str):
@@ -134,6 +134,9 @@ if __name__ == "__main__":
         help="Pre-fill the database with person, users, services and categories.",
     )
     args = parser.parse_args()
+    
+    if args.pre_filled:
+        require_demo_password()
 
     print("Starting database population...\n")
 

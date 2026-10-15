@@ -24,8 +24,10 @@ class PersonsClient:
                     break
 
             return all_persons
-        except httpx.HTTPError:
-            return []
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                return []
+            raise
 
     @staticmethod
     async def get_person(person_id: int):

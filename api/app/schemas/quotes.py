@@ -47,6 +47,9 @@ class QuoteCreate(QuoteBase):
 class QuoteUpdate(BaseModel):
     status: QuoteStatus | None = None
     valid_until: date | None = None
+    patient_id: int | None = None
+    staff_id: int | None = None
+    items: list[QuoteItemCreate] | None = Field(default=None, min_length=1)
 
 
 class QuoteResponse(QuoteBase):

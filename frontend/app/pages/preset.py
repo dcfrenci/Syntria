@@ -1005,7 +1005,6 @@ def builder_ui(state: QuoteBuilderState):
                             "png": "image/png",
                             "gif": "image/gif",
                             "webp": "image/webp",
-                            "svg": "image/svg+xml",
                         }
                         mime_type = mime_types.get(ext, "image/png")
 
@@ -1023,7 +1022,7 @@ def builder_ui(state: QuoteBuilderState):
                         type="negative",
                     ),
                 ).classes("w-full mb-4").props(
-                    'accept="image/*" flat bordered max-file-size=2097152'
+                    'accept=".png,.jpg,.jpeg,.gif,.webp" flat bordered max-file-size=2097152'
                 )
 
                 if el.get("content"):

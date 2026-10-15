@@ -37,6 +37,7 @@ rand() { openssl rand -base64 64 | tr -d '/+=\n' | cut -c1-40; }
 TEST_STARTED=0
 TEST_EMAIL="admin@syntria-test.dev"
 TEST_PW="$(rand)"
+TEST_DEMO_PW="$(rand)"
 TEST_DBPW="$(rand)"
 TEST_KEY="$(rand)$(rand)"
 
@@ -67,7 +68,7 @@ python_with_requests() {
 
 run_suite() {
   local py; py="$(python_with_requests)" || return 1
-  local suite_env=(ADMIN_EMAIL="$TEST_EMAIL" ADMIN_PASSWORD="$TEST_PW"
+    local suite_env=(ADMIN_EMAIL="$TEST_EMAIL" ADMIN_PASSWORD="$TEST_PW" DEMO_PASSWORD="$TEST_DEMO_PW"
                    API_BASE_URL="http://127.0.0.1:18081/api/v1")
 
   tc up -d --build --wait --wait-timeout 240 nginx || { tc logs --tail=40 api; return 1; }

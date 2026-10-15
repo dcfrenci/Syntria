@@ -7,8 +7,10 @@ class RolesClient:
         try:
             res = await APIClient.get("/roles/")
             return res if res is not None else []
-        except httpx.HTTPError:
-            return []
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                return []
+            raise
 
     @staticmethod
     async def create_role(data: dict):

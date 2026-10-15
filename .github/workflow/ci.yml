@@ -1,0 +1,38 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install ruff pip-audit
+      - run: ruff check --select E9,F63,F7,F82 api frontend scripts
+      - run: pip-audit -r api/requirements.lock
+      - run: pip-audit -r frontend/requirements.lock
+
+  integration:
+    runs-on: ubuntu-24.04
+    env:
+      ADMIN_EMAIL: ci-admin@example.test
+      COMPOSE_FILE: docker-compose.yaml:docker-compose.test.yaml
+      COMPOSE_PROFILES: ""
+      API_BASE_URL: http://127.0.0.1:18081/api/v1
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/gen-env.sh
+      - run: |
+          echo "ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+          echo "DEMO_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
+      - run: docker compose up -d --build --wait --wait-timeout 240 nginx
+      - run: docker compose exec -T -e ADMIN_PASSWORD api python -m app.cli bootstrap
+      - run: pip install -r scripts/requirements.txt
+      - run: python scripts/initialize.py --pre-filled && python scripts/role_testing.py
+      - if: failure()
+        run: docker compose logs --no-color --tail=200
+      - if: always()
+        run: docker compose down -v
+
+        

@@ -1,23 +1,64 @@
+import datetime
 import io
 import json
-import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+import logging
+from decimal import Decimal, InvalidOperation
+from typing import Literal, get_args
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import select, delete
+from pydantic import BaseModel, Field
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Quote, Item, Reservation, Preset, QuoteItem, Person, User
+from app.models import Item, Person, Preset, Quote, QuoteItem, Reservation, User
 from app.routers.auth import RoleChecker
+from app.schemas.presets import ComponentSchema, MarginSchema
+from app.schemas.quotes import QuoteStatus
 
 router = APIRouter(prefix="/import_export", tags=["Import & Export"])
 
 allow_admin_mgr = RoleChecker(["admin", "manager"])
 
+log = logging.getLogger("syntria.import_export")
+
+Entity = Literal["quotes", "items", "reservations", "presets"]
+
+
+class ExportPayload(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=5000)
+
+
+class CommitAction(BaseModel):
+    selected_action: Literal["keep", "update", "new", "ignore"]
+    data: dict = Field(default_factory=dict)
+
+
+class CommitPayload(BaseModel):
+    actions: list[CommitAction] = Field(max_length=5000)
+
+
+# --- CSV formula injection guard: cells starting with these are executed by Excel/LibreOffice ---
+_CSV_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_safe(v):
+    return "'" + v if isinstance(v, str) and v.startswith(_CSV_TRIGGERS) else v
+
+
+def _csv_unsafe(v):  # reverses _csv_safe on import so round-trips are lossless
+    if isinstance(v, str) and v.startswith("'") and v[1:].startswith(_CSV_TRIGGERS):
+        return v[1:]
+    return v
+
+
 def _pd():
     import pandas as pd
+
     return pd
+
 
 def parse_date(val):
     pd = _pd()
@@ -43,16 +84,79 @@ def parse_datetime(val):
     return val
 
 
+def _clean_row(entity: str, data: dict) -> dict:
+    """Re-validate untrusted commit data with the same rules as the normal API."""
+    try:
+        if entity == "items":
+            price = Decimal(str(data.get("price")))
+            if price <= 0 or price.as_tuple().exponent < -2:
+                raise ValueError("price")
+            name = str(data.get("name") or "")
+            if not 2 <= len(name) <= 100:
+                raise ValueError("name")
+            if (
+                data.get("description") is not None
+                and len(str(data["description"])) > 500
+            ):
+                raise ValueError("description")
+            data["price"] = price
+
+        elif entity == "quotes":
+            if data.get("status", "Draft") not in get_args(QuoteStatus):
+                raise ValueError("status")
+            items, total = [], Decimal("0.00")
+            for itm in data.get("items") or []:
+                qty = int(itm.get("quantity", 1))
+                unit = Decimal(str(itm.get("unit_price", 0)))
+                disc = Decimal(str(itm.get("discount", 0)))
+                if qty <= 0 or unit < 0 or disc < 0:
+                    raise ValueError("item")
+                total += max(unit * qty - disc, Decimal("0.00"))
+                items.append(
+                    {**itm, "quantity": qty, "unit_price": unit, "discount": disc}
+                )
+            data["items"] = items
+            data["total_amount"] = total  # never trust the CSV's total
+
+        elif entity == "reservations":
+            if not 0 < int(data.get("duration_minutes", 30)) <= 1440:
+                raise ValueError("duration")
+            if (
+                data.get("description") is not None
+                and len(str(data["description"])) > 500
+            ):
+                raise ValueError("description")
+
+        elif entity == "presets":
+            if not 1 <= len(str(data.get("name") or "")) <= 100:
+                raise ValueError("name")
+            elements = data.get("elements") or []
+            if len(elements) > 100:
+                raise ValueError("elements")
+            data["elements"] = [
+                ComponentSchema.model_validate(e).model_dump(mode="json")
+                for e in elements
+            ]
+            data["margins"] = MarginSchema.model_validate(
+                data.get("margins") or {}
+            ).model_dump()
+    except (ValueError, TypeError, ArithmeticError, AttributeError):
+        raise HTTPException(
+            422, f"Invalid {entity} data in import file. Nothing was saved."
+        )
+    return data
+
+
 @router.post("/export/{entity}")
 async def export_data(
-    entity: str,
-    payload: dict,
+    entity: Entity,
+    payload: ExportPayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Exports structured relationships to a flat CSV by serializing entire nested objects as JSON."""
     pd = _pd()
-    ids = payload.get("ids", [])
+    ids = payload.ids
     if not ids:
         raise HTTPException(400, "No IDs provided for export")
 
@@ -183,7 +287,7 @@ async def export_data(
     else:
         raise HTTPException(400, f"Unsupported export entity: {entity}")
 
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(data).map(_csv_safe)
     csv_buffer = io.StringIO()
     df.to_csv(csv_buffer, index=False)
     return Response(
@@ -197,7 +301,7 @@ async def export_data(
 async def validate_import(
     entity: str,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Parses a CSV upload and checks the database for conflicts and missing relations from nested objects."""
@@ -207,9 +311,8 @@ async def validate_import(
         raise HTTPException(413, "CSV too large (max 5 MB)")
     try:
         df = pd.read_csv(io.BytesIO(contents))
-        df = df.where(
-            pd.notnull(df), None
-        )  # Convert Pandas NaN to standard Python None
+        df = df.where(pd.notnull(df), None)
+        df = df.map(_csv_unsafe)
     except Exception as e:
         raise HTTPException(400, f"Failed to parse CSV: {str(e)}")
 
@@ -323,23 +426,25 @@ async def validate_import(
 
 @router.post("/commit/{entity}")
 async def commit_import(
-    entity: str,
-    payload: dict,
+    entity: Entity,
+    payload: CommitPayload,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Executes bulk inserts and updates within a single transaction from serialized nested objects."""
-    actions = payload.get("actions", [])
+    actions = payload.actions
 
     for act in actions:
-        action = act.get("selected_action")
-        data = act.get("data", {})
+        action = act.selected_action
+        data = act.data
 
         if action == "keep" or action == "ignore":
             continue
 
         if action == "new":
             data.pop("id", None)  # Let the DB assign a fresh ID
+
+        data = _clean_row(entity, data)
 
         try:
             if entity == "quotes":
@@ -449,11 +554,11 @@ async def commit_import(
                 if action == "new":
                     db.add(db_obj)
 
-        except Exception as e:
+        except Exception:
             await db.rollback()
+            log.exception("import commit failed for %s", entity)
             raise HTTPException(
-                500,
-                f"Transaction aborted due to error on {entity} ID {data.get('id', 'New')}: {str(e)}",
+                500, f"Import aborted on a {entity} record. Nothing was saved."
             )
 
     await db.commit()

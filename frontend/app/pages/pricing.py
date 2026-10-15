@@ -29,19 +29,21 @@ async def pricing_page():
 
         async def load_items():
             raw_items = await ServicesClient.get_items()
-            items = [
-                {
-                    "id": item["id"],
-                    "name": item["name"],
-                    "description": item["description"],
-                    "category": item["category"]["name"],
-                    "category_id": item["category"]["id"],
-                    "price": item["price"],
-                    "active": "Yes" if item["is_active"] else "No",
-                    "specific": "Yes" if item["is_specific"] else "No",
-                }
-                for item in raw_items
-            ]
+            items = []
+            for item in raw_items:
+                cat = item.get("category") or {}
+                items.append(
+                    {
+                        "id": item["id"],
+                        "name": item["name"],
+                        "description": item["description"],
+                        "category": cat.get("name", "—"),
+                        "category_id": cat.get("id"),
+                        "price": item["price"],
+                        "active": "Yes" if item["is_active"] else "No",
+                        "specific": "Yes" if item["is_specific"] else "No",
+                    }
+                )
             items.sort(key=lambda x: (x["category"].lower(), x["name"].lower()))
             return items
 
@@ -125,16 +127,18 @@ async def pricing_page():
                 )
                 await refresh_categories()
                 ui.notify("The category has been deleted", type="positive")
-                
+
         def attempt_delete_category():
             if not check_selected(table_categories, type="category"):
                 return
             selected_cat_id = table_categories.selected[0]["id"]
-            is_in_use = any(item.get("category_id") == selected_cat_id for item in table_items.rows)
+            is_in_use = any(
+                item.get("category_id") == selected_cat_id for item in table_items.rows
+            )
             if is_in_use:
                 ui.notify(
-                    "Cannot delete this category because it is currently assigned to one or more services.", 
-                    type="warning"
+                    "Cannot delete this category because it is currently assigned to one or more services.",
+                    type="warning",
                 )
             else:
                 delete_category_diag.open()

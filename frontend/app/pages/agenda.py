@@ -107,58 +107,55 @@ class Agenda:
 
 START_HOUR = 7
 END_HOUR = 20
-my_calendar = Calendar(
-    start_hour=START_HOUR, end_hour=END_HOUR, h_header=40, h_row=35, mt_row=5
-)
-my_agenda = Agenda(calendar_instance=my_calendar)
-
-
-async def save_reservation(reservation: dict, id: int | None = None):
-    if id is None:
-        await AgendaClient.create_reservation(data=reservation)
-    else:
-        await AgendaClient.update_reservation(reservation_id=id, data=reservation)
-    await my_agenda._update_ui()
-
-
-async def delete_reservation(reservation_id: int):
-    await AgendaClient.delete_reservation(reservation_id=reservation_id)
-    await my_agenda._update_ui()
-
-
-async def new_reservation():
-    modal = await reservation_modal(
-        title="New Reservation",
-        h_start=START_HOUR,
-        h_end=END_HOUR,
-        doctor_id=my_agenda.doctor_id,
-        on_save_callback=save_reservation,
-        on_delete_callback=delete_reservation,
-    )
-    modal.open()
-
-
-async def edit_reservation(reservation_id: int):
-    modal = await reservation_modal(
-        title="Edit Reservation",
-        h_start=START_HOUR,
-        h_end=END_HOUR,
-        doctor_id=my_agenda.doctor_id,
-        on_save_callback=save_reservation,
-        on_delete_callback=delete_reservation,
-        reservation_id=reservation_id,
-    )
-    modal.open()
 
 
 async def agenda_page():
     user_role = app.storage.user.get("role", "").lower()
 
+    # Per-session objects. NEVER move these back to module level: they would be shared by every user.
+    my_calendar = Calendar(
+        start_hour=START_HOUR, end_hour=END_HOUR, h_header=40, h_row=35, mt_row=5
+    )
+    my_agenda = Agenda(calendar_instance=my_calendar)
+
+    async def save_reservation(reservation: dict, id: int | None = None):
+        if id is None:
+            await AgendaClient.create_reservation(data=reservation)
+        else:
+            await AgendaClient.update_reservation(reservation_id=id, data=reservation)
+        await my_agenda._update_ui()
+
+    async def delete_reservation(reservation_id: int):
+        await AgendaClient.delete_reservation(reservation_id=reservation_id)
+        await my_agenda._update_ui()
+
+    async def new_reservation():
+        modal = await reservation_modal(
+            title="New Reservation",
+            h_start=START_HOUR,
+            h_end=END_HOUR,
+            doctor_id=my_agenda.doctor_id,
+            on_save_callback=save_reservation,
+            on_delete_callback=delete_reservation,
+        )
+        modal.open()
+
+    async def edit_reservation(reservation_id: int):
+        modal = await reservation_modal(
+            title="Edit Reservation",
+            h_start=START_HOUR,
+            h_end=END_HOUR,
+            doctor_id=my_agenda.doctor_id,
+            on_save_callback=save_reservation,
+            on_delete_callback=delete_reservation,
+            reservation_id=reservation_id,
+        )
+        modal.open()
+
     ui.label("Agenda").classes(Style.title())
 
     if user_role in ["admin", "manager", "secretary"]:
         all_users = await UsersClient.get_users()
-
         doctors = {
             u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
             for u in all_users
@@ -166,7 +163,6 @@ async def agenda_page():
             and u.get("is_active", True)
         }
 
-        # Doctor selection
         with ui.row().classes(Style.row_center()):
 
             async def update_agenda(e):
@@ -183,7 +179,6 @@ async def agenda_page():
 
     with ui.column().classes("w-full"):
         my_agenda.date_navigator()
-
         my_calendar.build(
             dates=my_agenda.get_current_week_dates(),
             on_callback=edit_reservation,
@@ -194,8 +189,6 @@ async def agenda_page():
 
     await my_agenda._update_ui()
 
-    # Floating buttons
     with ui.row().classes("fixed bottom-8 right-8 gap-4 z-50"):
-        # ui.button(icon="notifications_none")
         if user_role in ["admin", "manager", "secretary", "doctor"]:
             ui.button("New", icon="add", on_click=new_reservation)

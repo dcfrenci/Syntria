@@ -1,6 +1,5 @@
 from datetime import datetime
-import traceback
-
+import logging
 
 from nicegui import app, ui
 from api_client.quotes import QuotesClient
@@ -12,6 +11,9 @@ from components.quote_preview_modal import QuotePreviewModal
 from components.teeth_selection import teeth_selection
 from components.modals import confirmation_modal
 from components.style import Style
+
+
+log = logging.getLogger("syntria.home")
 
 
 def home_page():
@@ -197,7 +199,7 @@ async def quote_detail(
         persons = {p["id"]: p for p in await PersonsClient.get_persons()}
         users = await UsersClient.get_users()
         if len(users) == 0:
-            users = await UsersClient.get_user_me()
+            users = [await UsersClient.get_user_me()]
         
         doctor_person_ids = {
             u["person"]["id"]
@@ -657,9 +659,11 @@ async def quote_detail(
 async def quote_create():
     try:
         await quote_detail(title="New Quote")
-    except Exception as e:
-        ui.label(f"Crash detected: {str(e)}").classes("text-red text-xl font-bold")
-        print(traceback.format_exc(), flush=True)
+    except Exception:
+        log.exception("quote page failed")
+        ui.label("Something went wrong while loading this page. Please go back and try again.").classes(
+            "text-red text-xl font-bold"
+        )
 
 
 async def quote_edit(id: int):
@@ -686,6 +690,8 @@ async def quote_edit(id: int):
             staff_selected={"staff_id": (quote.get("staff") or {}).get("id")},
             services_selected=services_selected,
         )
-    except Exception as e:
-        ui.label(f"Crash detected: {str(e)}").classes("text-red text-xl font-bold")
-        print(traceback.format_exc(), flush=True)
+    except Exception:
+        log.exception("quote page failed")
+        ui.label("Something went wrong while loading this page. Please go back and try again.").classes(
+            "text-red text-xl font-bold"
+        )

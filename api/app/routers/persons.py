@@ -21,10 +21,16 @@ allow_write = RoleChecker(["admin", "manager", "secretary", "doctor"])
 allow_delete = RoleChecker(["admin", "manager"])
 
 
+def _hide_admin(person: Person, actor: User) -> None:
+    """Non-admins must not see, edit or delete the system admin's Person record."""
+    if person.email == settings.ADMIN_EMAIL and actor.role.name.lower() != "admin":
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Person not found.")
+
+
 @router.post("/", response_model=PersonResponse, status_code=status.HTTP_201_CREATED)
 async def create_person(
     payload: PersonCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     # Check for email conflict
@@ -53,7 +59,7 @@ async def create_person(
 
 @router.get("/", response_model=PersonListResponse, status_code=status.HTTP_200_OK)
 async def get_persons(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     search: str | None = Query(
@@ -73,7 +79,7 @@ async def get_persons(
                 Person.phone_number.ilike(search_pattern),
             )
         )
-        
+
     if current_user.role.name.lower() != "admin":
         filters.append(Person.email != settings.ADMIN_EMAIL)
 
@@ -98,7 +104,7 @@ async def get_persons(
 )
 async def get_person(
     person_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
@@ -124,6 +130,7 @@ async def get_person(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Person with ID {person_id} not found.",
         )
+    _hide_admin(person, current_user)
     return person
 
 
@@ -133,7 +140,7 @@ async def get_person(
 async def update_person(
     person_id: int,
     payload: PersonUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
@@ -159,8 +166,19 @@ async def update_person(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Person with ID {person_id} not found.",
         )
+    _hide_admin(person, current_user)
 
     update_data = payload.model_dump(exclude_unset=True)
+
+    if (
+        person.email == settings.ADMIN_EMAIL
+        and "email" in update_data
+        and update_data["email"] != person.email
+    ):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="The admin email is bound to ADMIN_EMAIL; change it in .env and in the database together.",
+        )
 
     # Validate email uniqueness if changing email
     if "email" in update_data and update_data["email"] != person.email:
@@ -205,8 +223,16 @@ async def delete_person(
     person = await db.get(Person, person_id)
     if not person:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Person with ID {person_id} not found.",
+            status.HTTP_404_NOT_FOUND, detail=f"Person with ID {person_id} not found."
+        )
+
+    _hide_admin(person, current_user)
+    if (
+        person.email == settings.ADMIN_EMAIL
+    ):  # even an admin: this would cascade-delete the admin user
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="The system admin person cannot be deleted.",
         )
 
     await db.delete(person)

@@ -3,14 +3,15 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, noload
+from sqlalchemy.orm import noload, selectinload
 
-from app.core.database import get_db
 from app.core.config import settings
-from app.routers.auth import get_current_user, RoleChecker
-from app.models import Quote, QuoteItem, Person, User, Item
+from app.core.database import get_db
+from app.models import Item, Person, Quote, QuoteItem, User
+from app.routers.auth import RoleChecker, get_current_user
 from app.schemas.quotes import (
     QuoteCreate,
+    QuoteItemCreate,
     QuoteListResponse,
     QuoteResponse,
     QuoteUpdate,
@@ -20,6 +21,71 @@ router = APIRouter(prefix="/quotes", tags=["Quotes"])
 
 allow_write = RoleChecker(["admin", "manager", "secretary", "doctor"])
 allow_delete = RoleChecker(["admin", "manager"])
+READ_ROLES = {
+    "admin",
+    "manager",
+    "secretary",
+    "doctor",
+    "assistant",
+    "employee",
+    "client",
+}
+
+
+def _can_access(quote: Quote, user: User) -> bool:
+    """Same visibility rules as the list endpoint."""
+    role = user.role.name.lower()
+    if role == "admin":
+        return True
+    if quote.patient and quote.patient.email == settings.ADMIN_EMAIL:
+        return False
+    if role in {"manager", "secretary"}:
+        return True
+    if role == "doctor":
+        return quote.staff_id == user.person_id
+    return quote.patient_id == user.person_id  # assistant / employee / client
+
+
+async def _build_items(
+    db: AsyncSession,
+    requested: list[QuoteItemCreate],
+    existing_prices: dict[int, Decimal] | None = None,
+) -> tuple[list[QuoteItem], Decimal]:
+    item_ids = {r.item_id for r in requested}
+    rows = (await db.execute(select(Item).where(Item.id.in_(item_ids)))).scalars().all()
+    items_map = {i.id: i for i in rows}
+    if len(items_map) != len(item_ids):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="One or more Item IDs are invalid."
+        )
+
+    built, total = [], Decimal("0.00")
+    for r in requested:
+        master = items_map[r.item_id]
+        # keep the price already quoted to the patient when editing; use today's price for new lines
+        unit_price = (existing_prices or {}).get(master.id, master.price)
+        line_total = max(unit_price * r.quantity - r.discount, Decimal("0.00"))
+        total += line_total
+        built.append(
+            QuoteItem(
+                item_id=master.id,
+                quantity=r.quantity,
+                unit_price=unit_price,
+                discount=r.discount,
+                teeth=r.teeth,
+            )
+        )
+    return built, total
+
+
+async def _load(db: AsyncSession, quote_id: int) -> Quote:
+    stmt = (
+        select(Quote)
+        .where(Quote.id == quote_id)
+        .options(selectinload(Quote.quote_items).selectinload(QuoteItem.item))
+        .execution_options(populate_existing=True)
+    )
+    return (await db.execute(stmt)).scalar_one()
 
 
 @router.post("/", response_model=QuoteResponse, status_code=status.HTTP_201_CREATED)
@@ -28,79 +94,32 @@ async def create_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(allow_write),
 ):
-    # 1. Verify Patient
-    patient = await db.get(Person, payload.patient_id)
-    if not patient:
+    if not await db.get(Person, payload.patient_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+    if payload.staff_id and not await db.get(Person, payload.staff_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Staff member not found.")
+    if (
+        current_user.role.name.lower() == "doctor"
+        and payload.staff_id != current_user.person_id
+    ):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
+            status.HTTP_403_FORBIDDEN,
+            detail="Doctors can only create their own quotes.",
         )
 
-    # 2. Verify Staff (if provided)
-    if payload.staff_id:
-        staff = await db.get(Person, payload.staff_id)
-        if not staff:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Staff member not found."
-            )
-
-    # 3. Fetch current Item prices and validate they exist
-    item_ids = [req_item.item_id for req_item in payload.items]
-    items_result = await db.execute(select(Item).where(Item.id.in_(item_ids)))
-    items_map = {item.id: item for item in items_result.scalars().all()}
-
-    if len(items_map) != len(set(item_ids)):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One or more Item IDs are invalid.",
-        )
-
-    # 4. Construct Quote
+    items, total = await _build_items(db, payload.items)
     quote = Quote(
         patient_id=payload.patient_id,
         staff_id=payload.staff_id,
         valid_until=payload.valid_until,
         status="Draft",
+        total_amount=total,
+        quote_items=items,
     )
     db.add(quote)
-    await db.flush()  # We flush here so quote gets its primary key 'id' generated
-
-    # 5. Process Quote Items and calculate total
-    total_amount = Decimal("0.00")
-    for req_item in payload.items:
-        master_item = items_map[req_item.item_id]
-        unit_price = master_item.price
-
-        # Subtotal: (Price * Quantity) - Discount
-        line_total = (unit_price * req_item.quantity) - req_item.discount
-        if line_total < 0:
-            line_total = Decimal("0.00")
-
-        total_amount += line_total
-
-        quote_item = QuoteItem(
-            quote_id=quote.id,
-            item_id=master_item.id,
-            quantity=req_item.quantity,
-            unit_price=unit_price,
-            discount=req_item.discount,
-            teeth=req_item.teeth,
-        )
-        db.add(quote_item)
-
-    # 6. Save total amount back to quote
-    quote.total_amount = total_amount
+    await db.flush()
     await db.commit()
-
-    # 7. Eagerly load the relationships to satisfy the QuoteResponse schema
-    stmt = (
-        select(Quote)
-        .where(Quote.id == quote.id)
-        .options(selectinload(Quote.quote_items).selectinload(QuoteItem.item))
-    )
-    result = await db.execute(stmt)
-    quote_with_relations = result.scalar_one()
-
-    return quote_with_relations
+    return await _load(db, quote.id)
 
 
 @router.get("/", response_model=QuoteListResponse, status_code=status.HTTP_200_OK)
@@ -112,36 +131,30 @@ async def get_quotes(
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
-    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
+    if role not in READ_ROLES:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
-    
+
     query = (
         select(Quote)
         .options(noload(Quote.quote_items))
         .order_by(Quote.created_at.desc())
     )
     count_query = select(func.count(Quote.id))
-    
-    role = current_user.role.name.lower()
-    
+
     if role in ["assistant", "employee", "client"]:
         patient_id = current_user.person_id
-        
     if role == "doctor":
         query = query.where(Quote.staff_id == current_user.person_id)
         count_query = count_query.where(Quote.staff_id == current_user.person_id)
-
     if patient_id:
         query = query.where(Quote.patient_id == patient_id)
         count_query = count_query.where(Quote.patient_id == patient_id)
-
     if role != "admin":
-        query = query.where(~Quote.patient.has(Person.email == settings.ADMIN_EMAIL))
-        count_query = count_query.where(~Quote.patient.has(Person.email == settings.ADMIN_EMAIL))
-        
+        hide = ~Quote.patient.has(Person.email == settings.ADMIN_EMAIL)
+        query, count_query = query.where(hide), count_query.where(hide)
+
     total = (await db.execute(count_query)).scalar_one()
     quotes = (await db.execute(query.offset(skip).limit(limit))).scalars().all()
-
     return {"total": total, "quotes": quotes}
 
 
@@ -151,21 +164,13 @@ async def get_quote(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    role = current_user.role.name.lower()
-    if role not in ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]:
+    if current_user.role.name.lower() not in READ_ROLES:
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
     quote = await db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found."
-        )
-
-    if role in ["employee", "client"] and quote.patient_id != current_user.person_id:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
-        )
-
+    # 404 (not 403): don't reveal that someone else's quote exists
+    if not quote or not _can_access(quote, current_user):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Quote not found.")
     return quote
 
 
@@ -179,27 +184,49 @@ async def update_quote(
     current_user: User = Depends(allow_write),
 ):
     quote = await db.get(Quote, quote_id)
-    if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found."
-        )
+    if not quote or not _can_access(quote, current_user):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Quote not found.")
 
     update_data = payload.model_dump(exclude_unset=True)
+    update_data.pop("items", None)
 
-    # Optional logic: prevent status changes on already accepted quotes
     if quote.status in ["Accepted", "Rejected"] and "status" in update_data:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status.HTTP_400_BAD_REQUEST,
             detail="Cannot alter the status of a finalized quote.",
+        )
+
+    if "patient_id" in update_data:
+        if update_data["patient_id"] is None or not await db.get(
+            Person, update_data["patient_id"]
+        ):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+    if update_data.get("staff_id") is not None and not await db.get(
+        Person, update_data["staff_id"]
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Staff member not found.")
+    if (
+        current_user.role.name.lower() == "doctor"
+        and "staff_id" in update_data
+        and update_data["staff_id"] != current_user.person_id
+    ):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Doctors cannot reassign a quote to another doctor.",
         )
 
     for field, value in update_data.items():
         setattr(quote, field, value)
 
-    await db.flush()
-    await db.refresh(quote)
+    if payload.items is not None:
+        existing_prices = {qi.item_id: qi.unit_price for qi in quote.quote_items}
+        quote.quote_items, quote.total_amount = await _build_items(
+            db, payload.items, existing_prices
+        )
 
-    return quote
+    await db.flush()
+    await db.commit()
+    return await _load(db, quote.id)
 
 
 @router.delete("/{quote_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -210,10 +237,7 @@ async def delete_quote(
 ):
     quote = await db.get(Quote, quote_id)
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found."
-        )
-
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Quote not found.")
     await db.delete(quote)
     await db.commit()
     return None

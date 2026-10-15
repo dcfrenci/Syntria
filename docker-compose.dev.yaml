@@ -12,7 +12,9 @@ services:
       - sh
       - -c
       - alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port $${FASTAPI_PORT} --proxy-headers --reload --reload-dir /app/app
-
+    environment:
+      ENABLE_DOCS: "true"
+      
   frontend:
     volumes:
       - ./frontend:/app

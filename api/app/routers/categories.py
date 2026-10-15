@@ -21,7 +21,7 @@ allow_write = RoleChecker(["admin", "manager"])
 @router.post("/", response_model=CategoryResponse, status_code=status.HTTP_201_CREATED)
 async def create_category(
     payload: CategoryCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write)
 ):
     query = select(Category).where(Category.name.ilike(payload.name))
@@ -41,7 +41,7 @@ async def create_category(
 # 2. READ ALL (GET with pagination and active filter)
 @router.get("/", response_model=CategoryListResponse, status_code=status.HTTP_200_OK)
 async def get_categories(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     is_active: bool | None = Query(default=None, description="Filter by active status"),
@@ -65,7 +65,7 @@ async def get_categories(
 @router.get("/{category_id}", response_model=CategoryResponse, status_code=status.HTTP_200_OK)
 async def get_category(
     category_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_read)
 ):
     category = (await db.execute(select(Category).where(Category.id == category_id))).scalar_one_or_none()
@@ -82,7 +82,7 @@ async def get_category(
 async def update_category(
     category_id: int,
     payload: CategoryUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write)
 ):
     category = (await db.execute(select(Category).where(Category.id == category_id))).scalar_one_or_none()
@@ -118,7 +118,7 @@ async def update_category(
 @router.delete("/{category_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_category(
     category_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write)
 ):
     category = (await db.execute(select(Category).where(Category.id == category_id))).scalar_one_or_none()

@@ -21,7 +21,7 @@ allow_write = RoleChecker(["admin", "manager"])
 @router.post("/", response_model=ItemResponse, status_code=status.HTTP_201_CREATED)
 async def create_item(
     payload: ItemCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     cat_exists = None
@@ -55,7 +55,7 @@ async def create_item(
 # 2. READ ALL (Filter by category_id)
 @router.get("/", response_model=ItemListResponse, status_code=status.HTTP_200_OK)
 async def get_items(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int | None = Query(default=None, ge=1),
     category_id: int | None = Query(default=None, description="Filter by Category ID"),
@@ -95,7 +95,7 @@ async def get_items(
 async def update_item(
     item_id: int,
     payload: ItemUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     item = (
@@ -132,7 +132,7 @@ async def update_item(
 @router.get("/{item_id}", response_model=ItemResponse, status_code=status.HTTP_200_OK)
 async def get_item(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_read),
 ):
     item = (
@@ -154,7 +154,7 @@ async def get_item(
 @router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_item(
     item_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     item = await db.get(Item, item_id)

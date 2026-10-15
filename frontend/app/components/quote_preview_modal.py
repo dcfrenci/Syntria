@@ -327,14 +327,16 @@ class QuotePreviewModal:
             iframe.style.display = 'none';
             document.body.appendChild(iframe);
             
+            const appStyles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+                .map(n => n.tagName === 'LINK' ? `<link rel="stylesheet" href="${{n.href}}">` : n.outerHTML)
+                .join('\\n');
+            
             const html = `
             <!DOCTYPE html>
             <html>
             <head>
-                <script src="https://cdn.tailwindcss.com"></script>
-                <link href="https://cdn.jsdelivr.net/npm/quasar@2/dist/quasar.prod.css" rel="stylesheet" type="text/css">
+                ${{appStyles}}
                 <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
                     @page {{ size: auto; margin: 0mm; }}
                     body {{ 
                         margin: 0; 

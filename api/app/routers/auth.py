@@ -1,29 +1,74 @@
+import logging
+import time
+from collections import defaultdict, deque
 from typing import Annotated, List
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
 import jwt
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_access_token, verify_password
-from app.models.persons import Person
+from app.core.security import create_access_token, get_password_hash, verify_password
 from app.models import User
-from app.schemas.auth import Token, TokenPayload
+from app.models.persons import Person
+from app.schemas.auth import Token
 
+log = logging.getLogger("syntria.auth")
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+
+# --- Per-account brute-force protection (in-memory: valid because uvicorn runs ONE worker) ---
+_DUMMY_HASH = get_password_hash("dummy-password-0")
+MAX_FAILS = 5
+WINDOW_SECONDS = 15 * 60
+MAX_TRACKED = 10_000
+_fails: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _prune(key: str, now: float) -> deque[float] | None:
+    q = _fails.get(key)
+    if q is None:
+        return None
+    while q and now - q[0] > WINDOW_SECONDS:
+        q.popleft()
+    if not q:
+        _fails.pop(key, None)
+        return None
+    return q
+
+
+def _check_throttle(key: str) -> None:
+    now = time.monotonic()
+    q = _prune(key, now)
+    if q is not None and len(q) >= MAX_FAILS:
+        retry = int(WINDOW_SECONDS - (now - q[0])) + 1
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Try again later.",
+            headers={"Retry-After": str(retry)},
+        )
+
+
+def _record_failure(key: str) -> None:
+    now = time.monotonic()
+    if len(_fails) >= MAX_TRACKED:
+        for k in list(_fails):
+            _prune(k, now)
+        if len(_fails) >= MAX_TRACKED:
+            _fails.clear()
+    _fails[key].append(now)
 
 
 # --- Protected Route Dependency ---
 async def get_current_user(
+    request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Decodes JWT and retrieves the authenticated User from PostgreSQL."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -33,19 +78,16 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
-        user_id: str | None = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except jwt.PyJWTError:
+        user_id = int(payload.get("sub"))
+    except (jwt.PyJWTError, TypeError, ValueError):
         raise credentials_exception
 
     query = (
         select(User)
-        .where(User.id == int(user_id))
+        .where(User.id == user_id)
         .options(selectinload(User.person), selectinload(User.role))
     )
-    result = await db.execute(query)
-    user = result.scalar_one_or_none()
+    user = (await db.execute(query)).scalar_one_or_none()
 
     if user is None:
         raise credentials_exception
@@ -54,30 +96,33 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
 
+    request.state.user_id = user.id
     return user
 
 
-# --- Login Endpoint ---
 @router.post("/token", response_model=Token, status_code=status.HTTP_200_OK)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db),
 ):
-    """
-    OAuth2 compatible token login. 
-    Accepts form-data: username (person email) and password.
-    """
-    # Look up User via Person.email
+    key = form_data.username.strip().lower()[:255]
+    _check_throttle(key)
+
     query = (
         select(User)
         .join(User.person)
         .where(Person.email == form_data.username)
         .options(selectinload(User.person), selectinload(User.role))
     )
-    result = await db.execute(query)
-    user = result.scalar_one_or_none()
+    user = (await db.execute(query)).scalar_one_or_none()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Always run bcrypt, even for unknown emails, so timing doesn't reveal which emails exist
+    password_ok = verify_password(
+        form_data.password, user.hashed_password if user else _DUMMY_HASH
+    )
+    if not user or not password_ok:
+        _record_failure(key)
+        log.warning("failed login attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -86,11 +131,10 @@ async def login_for_access_token(
 
     if not user.is_active:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, 
-            detail="User account is deactivated"
+            status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated"
         )
 
-    # Issue JWT token containing user id, email, and role
+    _fails.pop(key, None)
     token_data = {
         "sub": str(user.id),
         "email": user.person.email,
@@ -98,9 +142,10 @@ async def login_for_access_token(
         "first_name": user.person.first_name,
         "last_name": user.person.last_name,
     }
-    access_token = create_access_token(data=token_data)
-
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": create_access_token(data=token_data),
+        "token_type": "bearer",
+    }
 
 
 class RoleChecker:

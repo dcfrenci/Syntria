@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
+from common import DEMO_PASSWORD
+
 def get_reminders():
     return [{"name": "Sms"}, {"name": "WhatsApp"}, {"name": "Telegram"}]
 
@@ -401,92 +403,92 @@ def get_users(roles_map: dict, p_map: dict):
             "person_id": p_map["Matteo Bergamaschi"],
             "role_id": roles_map["Manager"],
             "is_active": True,
-            "password": "kL9$zQ2w",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Valentina Bruno"],
             "role_id": roles_map["Secretary"],
             "is_active": True,
-            "password": "sJ8*kP2m",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Giulia Rossi"],
             "role_id": roles_map["Assistant"],
             "is_active": True,
-            "password": "pM4@vX7c",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Marco Bianchi"],
             "role_id": roles_map["Doctor"],
             "is_active": True,
-            "password": "rT2#yN9b",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Alessandro Romano"],
             "role_id": roles_map["Employee"],
             "is_active": True,
-            "password": "bV5&cH1k",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Martina Colombo"],
             "role_id": roles_map["Client"],
             "is_active": True,
-            "password": "xN7*jP4d",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Chiara Esposito"],
             "role_id": roles_map["Client"],
             "is_active": True,
-            "password": "mK6^bV2n",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Davide Marino"],
             "role_id": roles_map["Client"],
             "is_active": True,
-            "password": "qW1$fD5x",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Sara Russo"],
             "role_id": roles_map["Client"],
             "is_active": True,
-            "password": "vC9@hJ7L",
+            "password": DEMO_PASSWORD,
         },
         # --- INACTIVE USERS ---
         {
             "person_id": p_map["Francesco Della Casa"],
             "role_id": roles_map["Manager"],
             "is_active": False,
-            "password": "testPass1!",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Lorenzo Ferrari"],
             "role_id": roles_map["Secretary"],
             "is_active": False,
-            "password": "gZ3%tR8s",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Sofia Ricci"],
             "role_id": roles_map["Doctor"],
             "is_active": False,
-            "password": "wE8!qF3m",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Antonietta Della Bella"],
             "role_id": roles_map["Assistant"],
             "is_active": False,
-            "password": "testPass1!",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Giuseppe Gallo"],
             "role_id": roles_map["Employee"],
             "is_active": False,
-            "password": "testPass1!",
+            "password": DEMO_PASSWORD,
         },
         {
             "person_id": p_map["Elena Costa"],
             "role_id": roles_map["Client"],
             "is_active": False,
-            "password": "testPass1!",
+            "password": DEMO_PASSWORD,
         },
     ]
 

@@ -22,7 +22,7 @@ router = APIRouter(prefix="/reservations", tags=["Reservations"])
 )
 async def create_reservation(
     payload: ReservationCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
@@ -135,7 +135,7 @@ async def create_reservation(
 )
 async def get_reservation(
     reservation_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
@@ -173,7 +173,7 @@ async def get_reservation(
 async def update_reservation(
     reservation_id: int,
     payload: ReservationUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()
@@ -301,7 +301,7 @@ async def update_reservation(
 
 @router.get("/", response_model=ReservationListResponse, status_code=status.HTTP_200_OK)
 async def get_reservations(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(get_current_user),
@@ -335,7 +335,7 @@ async def get_reservations(
 @router.delete("/{reservation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_reservation(
     reservation_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(RoleChecker(["admin", "manager", "secretary"])),
 ):
     reservation = await db.get(Reservation, reservation_id)

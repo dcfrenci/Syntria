@@ -1,7 +1,7 @@
 import os
 import sys
 import requests
-from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD, DEMO_PASSWORD, require_demo_password
 
 # Users extracted directly from seed_data.py
 TEST_USERS = [
@@ -10,74 +10,74 @@ TEST_USERS = [
     {
         "role": "Manager",
         "email": "matteo.b@gmail.com",
-        "password": "kL9$zQ2w",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     {
         "role": "Secretary",
         "email": "vale.bruno@email.com",
-        "password": "sJ8*kP2m",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     {
         "role": "Doctor",
         "email": "mbianchi88@yahoo.it",
-        "password": "rT2#yN9b",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     {
         "role": "Assistant",
         "email": "giulia.rossi@email.com",
-        "password": "pM4@vX7c",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     {
         "role": "Employee",
         "email": "alex.romano@email.com",
-        "password": "bV5&cH1k",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     {
         "role": "Client",
         "email": "marty.colombo@gmail.com",
-        "password": "xN7*jP4d",
+        "password": DEMO_PASSWORD,
         "active": True,
     },
     # Inactive Users (For testing Authentication blocking)
     {
         "role": "Manager (Inactive)",
         "email": "francesco@gmai.com",
-        "password": "testPass1!",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
     {
         "role": "Secretary (Inactive)",
         "email": "lorenzo.f@email.com",
-        "password": "gZ3%tR8s",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
     {
         "role": "Doctor (Inactive)",
         "email": "s.ricci@gmail.com",
-        "password": "wE8!qF3m",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
     {
         "role": "Assistant (Inactive)",
         "email": "antonella@email.com",
-        "password": "testPass1!",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
     {
         "role": "Employee (Inactive)",
         "email": "ggallo@yahoo.it",
-        "password": "testPass1!",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
     {
         "role": "Client (Inactive)",
         "email": "elena.costa@gmail.com",
-        "password": "testPass1!",
+        "password": DEMO_PASSWORD,
         "active": False,
     },
 ]
@@ -92,7 +92,6 @@ EXPECTED_ALLOWED = {
         "Employee",
         "Client",
     ],
-    ("POST", "/users/admin"): [],
     ("GET", "/users/"): ["Admin", "Manager", "Secretary"],
     ("POST", "/users/"): ["Admin", "Manager"],
     ("GET", "/users/me"): [
@@ -104,7 +103,7 @@ EXPECTED_ALLOWED = {
         "Employee",
     ],
     ("GET", "/users/1"): ["Admin", "Manager", "Secretary"],
-    ("PATCH", "/users/1"): ["Admin", "Manager"],
+    ("PATCH", "/users/1"): ["Admin"],
     ("DELETE", "/users/1"): ["Admin"],
     ("GET", "/users/reservations?start_date=2026-01-01"): [
         "Admin",
@@ -218,27 +217,30 @@ def test_all_endpoints(token: str, role_name: str):
     correct = 0
     wrong = 0
 
+    # Fetch current user's person_id to satisfy self-assigned business logic restrictions
+    current_person_id = None
+    if token:
+        try:
+            me_res = requests.get(f"{BASE_URL}/users/me", headers=headers)
+            if me_res.status_code == 200:
+                current_person_id = me_res.json().get("person", {}).get("id")
+        except requests.exceptions.RequestException:
+            pass
+
+    # Build the payload dynamically to include the staff_id for the logged-in doctor
+    quote_payload = {"patient_id": 1, "items": [{"item_id": 1}]}
+    if current_person_id is not None:
+        quote_payload["staff_id"] = current_person_id
+
     endpoints = [
         # 1. Auth & System
         ("GET", "/health", None, None),
-        (
-            "POST",
-            "/users/admin",
-            {
-                "role_name": "Admin",
-                "first_name": "Admin",
-                "last_name": "System",
-                "email": "admin@email.com",
-                "password": "asTf82#1",
-            },
-            None,
-        ),
         # 2. Users
         ("GET", "/users/", None, None),
         (
             "POST",
             "/users/",
-            {"person_id": 999, "role_id": 1, "password": "TestPassword1!"},
+            {"person_id": 999, "role_id": 2, "password": DEMO_PASSWORD},
             None,
         ),
         ("GET", "/users/me", None, None),
@@ -277,7 +279,7 @@ def test_all_endpoints(token: str, role_name: str):
         ("DELETE", "/reservations/1", None, None),
         # 6. Quotes
         ("GET", "/quotes/", None, None),
-        ("POST", "/quotes/", {"patient_id": 1, "items": [{"item_id": 1}]}, None),
+        ("POST", "/quotes/", quote_payload, None),
         ("GET", "/quotes/1", None, None),
         ("PATCH", "/quotes/1", {}, None),
         ("DELETE", "/quotes/1", None, None),
@@ -311,7 +313,7 @@ def test_all_endpoints(token: str, role_name: str):
             {"file": ("test.csv", b"id,name\n1,test", "text/csv")},
         ),
         ("POST", "/import_export/commit/items", {"actions": []}, None),
-    ]
+    ]    
 
     for method, path, payload, files in endpoints:
         is_allowed = role_name in EXPECTED_ALLOWED.get((method, path), [])
@@ -348,26 +350,22 @@ def test_all_endpoints(token: str, role_name: str):
             # Evaluate correctness
             is_correct = False
 
-            if "/users/admin" in path:
-                expected_desc = "403/422"
-                if status_code in [403, 404, 405, 422]:
-                    is_correct = True
-            else:
-                is_item_endpoint = path.endswith("/1")
-                expected_desc = (
-                    "!= 403"
-                    if is_allowed
-                    else ("403/404" if is_item_endpoint else "== 403")
-                )
+            
+            is_item_endpoint = path.endswith("/1")
+            expected_desc = (
+                "!= 403"
+                if is_allowed
+                else ("403/404" if is_item_endpoint else "== 403")
+            )
 
-                if is_allowed and status_code != 403:
+            if is_allowed and status_code != 403:
+                is_correct = True
+            elif not is_allowed:
+                if status_code == 403:
                     is_correct = True
-                elif not is_allowed:
-                    if status_code == 403:
-                        is_correct = True
-                    # Accept 404 for item endpoints because earlier tests (Admin) legally deleted the item
-                    elif is_item_endpoint and status_code == 404:
-                        is_correct = True
+                # Accept 404 for item endpoints because earlier tests (Admin) legally deleted the item
+                elif is_item_endpoint and status_code == 404:
+                    is_correct = True
 
             judgment = "[CORRECT]" if is_correct else "[WRONG]"
             if is_correct:
@@ -400,6 +398,8 @@ def test_all_endpoints(token: str, role_name: str):
 
 def main():
     print("Starting Permissions Test Script...\n")
+    
+    require_demo_password()
 
     score = []
     for user in TEST_USERS:

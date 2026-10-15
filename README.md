@@ -17,7 +17,6 @@
 - [🏗️ Architecture \& Containerized Services](#️-architecture--containerized-services)
 - [🔑 Key Features](#-key-features)
 - [🚀 Deployment \& Installation](#-deployment--installation)
-- [🚀 Deployment \& Installation (Production)](#-deployment--installation-production)
   - [1. Prerequisites](#1-prerequisites)
   - [2. Download](#2-download)
   - [3. Environment configuration](#3-environment-configuration)
@@ -30,8 +29,6 @@
   - [10. Backups and restore](#10-backups-and-restore)
   - [11. Updating and rolling back](#11-updating-and-rolling-back)
   - [12. Reverse proxy and SSL alternatives](#12-reverse-proxy-and-ssl-alternatives)
-- [Keep the API and pgAdmin off the internet: they are only exposed by the private tier (port 81), never by the snippet above.](#keep-the-api-and-pgadmin-off-the-internet-they-are-only-exposed-by-the-private-tier-port-81-never-by-the-snippet-above)
-- [🧪 Testing](#-testing)
 
 ---
 
@@ -87,22 +84,21 @@ Syntria is orchestrated via Docker Compose within an isolated custom bridge netw
 ---
 
 ## 🚀 Deployment & Installation
-## 🚀 Deployment & Installation (Production)
 
 Syntria runs as a Docker Compose stack: `db` (PostgreSQL 16), `api` (FastAPI), `frontend` (NiceGUI), `nginx` (two-tier reverse proxy), `backup` (encrypted pg_dump loop) and `tailscale` (HTTPS ingress). Nothing needs to be installed on the host except Docker and a few CLI tools.
 
 ### 1. Prerequisites
 
-| Requirement | Minimum | Notes |
-| --- | --- | --- |
-| Linux host | Ubuntu 22.04 / Debian 12 | amd64 or arm64 |
-| CPU / RAM / disk | 2 vCPU / 2 GB / 10 GB | Container limits in the compose file sum to about 1.7 GB (+384 MB if pgAdmin is enabled) |
-| Docker Engine | 24.0 | |
-| Docker Compose plugin | 2.20 | Needs `--wait`, `depends_on: service_healthy` and `profiles` |
-| git, openssl | any recent | `gen-env.sh` uses `openssl` |
-| `age` | 1.0 | On the **host**, for `restore.sh` and key handling (`apt install age`) |
-| Python 3 + `venv` | 3.9 | Host-side only, for `scripts/*.py` (tests/seed). The containers use Python **3.12** (the code relies on 3.12 f-string syntax, so never set `PYTHON_VERSION` below 3.12) |
-| Tailscale account | – | MagicDNS and HTTPS certificates enabled, Funnel allowed in the ACL (`nodeAttrs` → `funnel`), and a reusable or one-off **auth key** |
+| Requirement           | Minimum                  | Notes                                                                                                                                                                   |
+| --------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux host            | Ubuntu 22.04 / Debian 12 | amd64 or arm64                                                                                                                                                          |
+| CPU / RAM / disk      | 2 vCPU / 2 GB / 10 GB    | Container limits in the compose file sum to about 1.7 GB (+384 MB if pgAdmin is enabled)                                                                                |
+| Docker Engine         | 24.0                     |                                                                                                                                                                         |
+| Docker Compose plugin | 2.20                     | Needs `--wait`, `depends_on: service_healthy` and `profiles`                                                                                                            |
+| git, openssl          | any recent               | `gen-env.sh` uses `openssl`                                                                                                                                             |
+| `age`                 | 1.0                      | On the **host**, for `restore.sh` and key handling (`apt install age`)                                                                                                  |
+| Python 3 + `venv`     | 3.9                      | Host-side only, for `scripts/*.py` (tests/seed). The containers use Python **3.12** (the code relies on 3.12 f-string syntax, so never set `PYTHON_VERSION` below 3.12) |
+| Tailscale account     | –                        | MagicDNS and HTTPS certificates enabled, Funnel allowed in the ACL (`nodeAttrs` → `funnel`), and a reusable or one-off **auth key**                                     |
 
 ### 2. Download
 
@@ -134,29 +130,29 @@ nano .env                                                             # TS_AUTHK
 
 `.env` is also sourced by `restore.sh` and `bootstrap.sh`, so quote values containing spaces, `#` or `$`.
 
-| Variable | Required | Purpose | Production value |
-| --- | --- | --- | --- |
-| `PYTHON_VERSION` | yes | Base image tag (build arg) | `3.12-slim` |
-| `POSTGRES_IMAGE` | yes | DB image; the `backup` image is built from the same one, so `pg_dump` matches the server major version | `postgres:16-alpine` |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | yes | DB credentials (URL-encoded automatically, so special characters are safe) | generated by `gen-env.sh` |
-| `POSTGRES_HOST` / `POSTGRES_PORT` | yes | Must be the compose service name and port | `db` / `5432` |
-| `ADMIN_EMAIL` | yes | Login of the system admin. The API also **hides** this person from non-admin users, so choose it once | `owner@yourclinic.it` |
-| `SECRET_KEY` | yes | JWT signing key. The API refuses to start if it is shorter than 32 chars or contains `change_me`/`supersecret`/`changeme`. Rotating it logs everyone out | generated (≈80 chars) |
-| `FASTAPI_PORT` / `NICEGUI_PORT` | yes | Internal ports. **Do not change**: `nginx.conf` hardcodes `api:8000` and `frontend:8080` | `8000` / `8080` |
-| `NICEGUI_STORAGE_SECRET` | yes | Signs the UI session cookie (empty = insecure). Rotating it logs everyone out | generated |
-| `API_BASE_URL` | yes | How the frontend reaches the API (server-to-server, inside Docker) | `http://api:${FASTAPI_PORT}/api/v1` |
-| `NGINX_IMAGE`, `TAILSCALE_IMAGE`, `PGADMIN_IMAGE` | yes | Image tags. Pin exact versions in production instead of `latest` | e.g. `nginx:1.27-alpine` |
-| `TAILSCALE_CONTAINER_NAME` | yes | Used by the `docker exec` commands below | `tailscale_gateway` |
-| `TAILSCALE_HOSTNAME` | yes | Name of the node on your tailnet (becomes `<name>.<tailnet>.ts.net`) | `syntria` |
-| `TS_AUTHKEY` | prod | Tailscale auth key, used on first start (state then persists in the `tailscale_data` volume) | `tskey-auth-…` |
-| `COMPOSE_PROFILES` | yes | `tailscale` = production ingress. `tools` = pgAdmin (dev only) | `tailscale` |
-| `COMPOSE_FILE` | prod | Uncomment to disable the dev override file | `docker-compose.yaml` |
-| `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` / `PGADMIN_LISTEN_PORT` | tools only | pgAdmin login. Keep the listen port at `5050` (hardcoded in `nginx.conf`) | generated / `5050` |
-| `BACKUP_UID` / `BACKUP_GID` | yes | Owner of dump files (set by `gen-env.sh`) | your `id -u` / `id -g` |
-| `BACKUP_KEEP_DAYS` / `BACKUP_INTERVAL_HOURS` | no | Retention and frequency | `14` / `24` |
-| `AGE_RECIPIENT` | prod | `age1…` public key. Dumps are encrypted with it; required when `RCLONE_REMOTE` is set | see §10 |
-| `RCLONE_REMOTE` | no | Off-site target, e.g. `gdrive:syntria-backups` or `b2:bucket/syntria` | optional but recommended |
-| `HEALTHCHECK_URL` | no | healthchecks.io ping URL, hit only after a successful backup | optional but recommended |
+| Variable                                                                     | Required   | Purpose                                                                                                                                                  | Production value                    |
+| ---------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `PYTHON_VERSION`                                                             | yes        | Base image tag (build arg)                                                                                                                               | `3.12-slim`                         |
+| `POSTGRES_IMAGE`                                                             | yes        | DB image; the `backup` image is built from the same one, so `pg_dump` matches the server major version                                                   | `postgres:16-alpine`                |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB`                        | yes        | DB credentials (URL-encoded automatically, so special characters are safe)                                                                               | generated by `gen-env.sh`           |
+| `POSTGRES_HOST` / `POSTGRES_PORT`                                            | yes        | Must be the compose service name and port                                                                                                                | `db` / `5432`                       |
+| `ADMIN_EMAIL`                                                                | yes        | Login of the system admin. The API also **hides** this person from non-admin users, so choose it once                                                    | `owner@yourclinic.it`               |
+| `SECRET_KEY`                                                                 | yes        | JWT signing key. The API refuses to start if it is shorter than 32 chars or contains `change_me`/`supersecret`/`changeme`. Rotating it logs everyone out | generated (≈80 chars)               |
+| `FASTAPI_PORT` / `NICEGUI_PORT`                                              | yes        | Internal ports. **Do not change**: `nginx.conf` hardcodes `api:8000` and `frontend:8080`                                                                 | `8000` / `8080`                     |
+| `NICEGUI_STORAGE_SECRET`                                                     | yes        | Signs the UI session cookie (empty = insecure). Rotating it logs everyone out                                                                            | generated                           |
+| `API_BASE_URL`                                                               | yes        | How the frontend reaches the API (server-to-server, inside Docker)                                                                                       | `http://api:${FASTAPI_PORT}/api/v1` |
+| `NGINX_IMAGE`, `TAILSCALE_IMAGE`, `PGADMIN_IMAGE`                            | yes        | Image tags. Pin exact versions in production instead of `latest`                                                                                         | e.g. `nginx:1.27-alpine`            |
+| `TAILSCALE_CONTAINER_NAME`                                                   | yes        | Used by the `docker exec` commands below                                                                                                                 | `tailscale_gateway`                 |
+| `TAILSCALE_HOSTNAME`                                                         | yes        | Name of the node on your tailnet (becomes `<name>.<tailnet>.ts.net`)                                                                                     | `syntria`                           |
+| `TS_AUTHKEY`                                                                 | prod       | Tailscale auth key, used on first start (state then persists in the `tailscale_data` volume)                                                             | `tskey-auth-…`                      |
+| `COMPOSE_PROFILES`                                                           | yes        | `tailscale` = production ingress. `tools` = pgAdmin (dev only)                                                                                           | `tailscale`                         |
+| `COMPOSE_FILE`                                                               | prod       | Uncomment to disable the dev override file                                                                                                               | `docker-compose.yaml`               |
+| `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAULT_PASSWORD` / `PGADMIN_LISTEN_PORT` | tools only | pgAdmin login. Keep the listen port at `5050` (hardcoded in `nginx.conf`)                                                                                | generated / `5050`                  |
+| `BACKUP_UID` / `BACKUP_GID`                                                  | yes        | Owner of dump files (set by `gen-env.sh`)                                                                                                                | your `id -u` / `id -g`              |
+| `BACKUP_KEEP_DAYS` / `BACKUP_INTERVAL_HOURS`                                 | no         | Retention and frequency                                                                                                                                  | `14` / `24`                         |
+| `AGE_RECIPIENT`                                                              | prod       | `age1…` public key. Dumps are encrypted with it; required when `RCLONE_REMOTE` is set                                                                    | see §10                             |
+| `RCLONE_REMOTE`                                                              | no         | Off-site target, e.g. `gdrive:syntria-backups` or `b2:bucket/syntria`                                                                                    | optional but recommended            |
+| `HEALTHCHECK_URL`                                                            | no         | healthchecks.io ping URL, hit only after a successful backup                                                                                             | optional but recommended            |
 
 `PROJECT_NAME`, `*_CONTAINER_NAME` (except Tailscale) and `PGADMIN_PORT` are currently not referenced by `docker-compose.yaml`.
 
@@ -315,14 +311,4 @@ server { listen 80; server_name clinic.example.com; return 301 https://$host$req
 ```
 
 Keep the API and pgAdmin off the internet: they are only exposed by the private tier (port 81), never by the snippet above.
----
 
-## 🧪 Testing
-To execute automated role permission tests and validate API access controls in an ephemeral environment, run:
-```bash
-docker compose up --build -d
-python3 scripts/initialize.py --pre-filled
-python3 scripts/role_testing.py
-docker compose down -v
-```
-> ⚠️ **Warnin**:: Because the final command (docker compose down -v) completely destroys the containers and their local volumes, you will need to re-run the commands in the Networking & Access (Tailscale) section when you bring the stack back online for regular use.

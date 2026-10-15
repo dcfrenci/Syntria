@@ -7,8 +7,10 @@ class RemindersClient:
         try:
             res = await APIClient.get("/reminders/")
             return res if res is not None else []
-        except httpx.HTTPError:
-            return []
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                return []
+            raise
         
     @staticmethod
     async def create_preference(data: dict):

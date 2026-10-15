@@ -1,21 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, or_
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
 from app.core.database import get_db
 from app.core.security import get_password_hash
-from app.models import Role, User, Person, Reservation
-from app.routers.auth import get_current_user, RoleChecker
-from app.schemas.users import (
-    UserCreate,
-    UserListResponse,
-    UserResponse,
-    UserUpdate,
-)
+from app.models import Person, Reservation, Role, User
+from app.routers.auth import RoleChecker, get_current_user
 from app.schemas.reservations import ReservationListResponse
+from app.schemas.users import UserCreate, UserListResponse, UserResponse, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users & Staff"])
 
@@ -27,7 +23,47 @@ allow_all_staff = RoleChecker(
 
 
 # ---------------------------------------------------------
-# User (Staff Account) CRUD Endpoints
+# Privilege helpers
+# ---------------------------------------------------------
+def _is_admin(u: User) -> bool:
+    return u.role.name.lower() == "admin"
+
+
+async def _active_admin_count(db: AsyncSession) -> int:
+    q = (
+        select(func.count(User.id))
+        .join(User.role)
+        .where(func.lower(Role.name) == "admin", User.is_active.is_(True))
+    )
+    return (await db.execute(q)).scalar_one()
+
+
+async def _guard(
+    db: AsyncSession,
+    actor: User,
+    *,
+    target: User | None = None,
+    new_role_id: int | None = None,
+) -> None:
+    """Only an admin may touch an admin account or hand out the Admin role."""
+    if _is_admin(actor):
+        return
+    if target is not None and _is_admin(target):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Only an admin can modify an admin account.",
+        )
+    if new_role_id is not None:
+        role = await db.get(Role, new_role_id)
+        if role and role.name.lower() == "admin":
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail="Only an admin can assign the Admin role.",
+            )
+
+
+# ---------------------------------------------------------
+# CRUD
 # ---------------------------------------------------------
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
@@ -35,33 +71,30 @@ async def create_user(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(allow_admin_mgr),
 ):
-    # 1. Check if Person exists
+    await _guard(db, current_user, new_role_id=payload.role_id)  # <-- NEW
+
     person = await db.get(Person, payload.person_id)
     if not person:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status.HTTP_404_NOT_FOUND,
             detail=f"Person ID {payload.person_id} not found.",
         )
 
-    # 2. Check if Person already has a User account
     user_check = await db.execute(
         select(User).where(User.person_id == payload.person_id)
     )
     if user_check.scalar_one_or_none():
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status.HTTP_409_CONFLICT,
             detail="A staff user account is already linked to this person.",
         )
 
-    # 3. Check if Role exists
     role = await db.get(Role, payload.role_id)
     if not role:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Role ID {payload.role_id} not found.",
+            status.HTTP_404_NOT_FOUND, detail=f"Role ID {payload.role_id} not found."
         )
 
-    # 4. Create User with hashed password
     new_user = User(
         person_id=payload.person_id,
         role_id=payload.role_id,
@@ -75,9 +108,7 @@ async def create_user(
 
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def get_my_profile(
-    current_user: User = Depends(allow_all_staff),
-):
+async def get_my_profile(current_user: User = Depends(allow_all_staff)):
     """Retrieve details of the currently logged-in staff member."""
     return current_user
 
@@ -96,10 +127,11 @@ async def list_users(
         filters.append(User.role_id == role_id)
     if is_active is not None:
         filters.append(User.is_active == is_active)
+    if not _is_admin(current_user):  # <-- NEW: hide admin accounts from non-admins
+        filters.append(User.role.has(func.lower(Role.name) != "admin"))
 
     query = select(User).options(selectinload(User.person), selectinload(User.role))
     count_query = select(func.count(User.id))
-
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
@@ -110,15 +142,20 @@ async def list_users(
         .scalars()
         .all()
     )
-
     return {"total": total, "users": users}
 
 
 @router.get("/reservations", response_model=ReservationListResponse)
 async def get_reservations(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD). Default: the Mon-Sun week of start_date"),
-    user_id: Optional[int] = Query(None, description="PERSON id to look up (doctor or patient). Default: the logged-in user's person."),
+    end_date: Optional[date] = Query(
+        None,
+        description="End date (YYYY-MM-DD). Default: the Mon-Sun week of start_date",
+    ),
+    user_id: Optional[int] = Query(
+        None,
+        description="PERSON id to look up (doctor or patient). Default: the logged-in user's person.",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -128,17 +165,22 @@ async def get_reservations(
     standard_roles = ["doctor", "assistant", "employee", "client"]
 
     if role not in privileged_roles + standard_roles:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Insufficient privileges.")
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
+        )
 
     target_person_id = user_id if user_id is not None else current_user.person_id
 
     if target_person_id != current_user.person_id:
         if role not in privileged_roles:
             raise HTTPException(
-                status.HTTP_403_FORBIDDEN, detail="You can only view your own reservations."
+                status.HTTP_403_FORBIDDEN,
+                detail="You can only view your own reservations.",
             )
         if await db.get(Person, target_person_id) is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Target person not found.")
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, detail="Target person not found."
+            )
 
     if end_date is None:
         active_start = start_date - timedelta(days=start_date.weekday())
@@ -146,9 +188,10 @@ async def get_reservations(
     else:
         active_start, active_end = start_date, end_date
 
-    # explicit tz-aware bounds, end exclusive
     range_start = datetime.combine(active_start, time.min, tzinfo=timezone.utc)
-    range_end = datetime.combine(active_end + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    range_end = datetime.combine(
+        active_end + timedelta(days=1), time.min, tzinfo=timezone.utc
+    )
 
     query = (
         select(Reservation)
@@ -190,10 +233,10 @@ async def get_user(
         )
     ).scalar_one_or_none()
 
-    if not user:
+    # NEW: 404 (not 403) so non-admins can't even confirm an admin account exists
+    if not user or (_is_admin(user) and not _is_admin(current_user)):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with ID {user_id} not found.",
+            status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found."
         )
     return user
 
@@ -212,27 +255,50 @@ async def update_user(
             .where(User.id == user_id)
         )
     ).scalar_one_or_none()
-
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with ID {user_id} not found.",
+            status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found."
         )
 
     update_data = payload.model_dump(exclude_unset=True)
 
-    # If updating role, ensure target role exists
-    if "role_id" in update_data and update_data["role_id"] is not None:
-        role = await db.get(Role, update_data["role_id"])
-        if not role:
+    await _guard(
+        db, current_user, target=user, new_role_id=update_data.get("role_id")
+    )  # <-- NEW
+
+    new_role = None
+    if update_data.get("role_id") is not None:
+        new_role = await db.get(Role, update_data["role_id"])
+        if not new_role:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status.HTTP_404_NOT_FOUND,
                 detail=f"Role ID {update_data['role_id']} not found.",
             )
 
-    # Hash new password if updated
-    if "password" in update_data and update_data["password"]:
+    # NEW: never lock the system out of its last admin, never let someone deactivate themselves
+    if update_data.get("is_active") is False and user.id == current_user.id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own account.",
+        )
+    loses_admin = (
+        _is_admin(user)
+        and user.is_active
+        and (
+            update_data.get("is_active") is False
+            or (new_role is not None and new_role.name.lower() != "admin")
+        )
+    )
+    if loses_admin and await _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="Cannot demote or deactivate the last active admin.",
+        )
+
+    if update_data.get("password"):
         user.hashed_password = get_password_hash(update_data.pop("password"))
+    else:
+        update_data.pop("password", None)
 
     for field, value in update_data.items():
         setattr(user, field, value)
@@ -251,8 +317,15 @@ async def delete_user(
     user = await db.get(User, user_id)
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"User with ID {user_id} not found.",
+            status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found."
+        )
+    if user.id == current_user.id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account."
+        )
+    if _is_admin(user) and user.is_active and await _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, detail="Cannot delete the last active admin."
         )
 
     await db.delete(user)

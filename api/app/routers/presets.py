@@ -26,7 +26,7 @@ allow_delete = RoleChecker(["admin", "manager"])
 @router.post("/", response_model=PresetResponse, status_code=status.HTTP_201_CREATED)
 async def create_preset(
     payload: PresetCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     # If the new preset is set to active, deactivate all existing presets
@@ -43,7 +43,7 @@ async def create_preset(
 
 @router.get("/", response_model=PresetListResponse, status_code=status.HTTP_200_OK)
 async def get_presets(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=100),
     current_user: User = Depends(allow_read),
@@ -63,7 +63,7 @@ async def get_presets(
 
 @router.get("/active", response_model=PresetResponse, status_code=status.HTTP_200_OK)
 async def get_active_preset(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_read_active),
 ):
     # Assuming your model has an 'is_active' boolean column
@@ -91,7 +91,7 @@ async def get_active_preset(
 )
 async def get_preset(
     preset_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_read),
 ):
     preset = await db.get(Preset, preset_id)
@@ -108,7 +108,7 @@ async def get_preset(
 async def update_preset(
     preset_id: int,
     payload: PresetUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
     preset = await db.get(Preset, preset_id)
@@ -136,7 +136,7 @@ async def update_preset(
 @router.delete("/{preset_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_preset(
     preset_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_delete),
 ):
     preset = await db.get(Preset, preset_id)
