@@ -46,20 +46,37 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if docs else None,
 )
 # No CORS middleware on purpose: the API is only called server-to-server by the NiceGUI container.
+MAX_BODY = 12 * 1024 * 1024
+
+
+@app.middleware("http")
+async def limit_body(request: Request, call_next):
+    cl = request.headers.get("content-length")
+    if cl and cl.isdigit() and int(cl) > MAX_BODY:
+        return JSONResponse(
+            status_code=413, content={"detail": "Request body too large."}
+        )
+    return await call_next(request)
 
 
 @app.middleware("http")
 async def request_log(request: Request, call_next):
     rid = request.headers.get("x-request-id") or uuid.uuid4().hex
+    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "-")
     t0 = time.perf_counter()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        log.error(
+            "%s %s -> 500 %.0fms rid=%s ip=%s user=%s",
+            request.method, request.url.path, (time.perf_counter() - t0) * 1000,
+            rid, ip, getattr(request.state, "user_id", "-"),
+        )
+        raise  # the Exception handler still builds the 500 response
     log.info(
-        "%s %s -> %s %.0fms rid=%s user=%s",
-        request.method,
-        request.url.path,
-        response.status_code,
-        (time.perf_counter() - t0) * 1000,
-        rid,
+        "%s %s -> %s %.0fms rid=%s ip=%s user=%s",
+        request.method, request.url.path, response.status_code,
+        (time.perf_counter() - t0) * 1000, rid, ip,
         getattr(request.state, "user_id", "-"),
     )
     response.headers["x-request-id"] = rid

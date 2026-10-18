@@ -2,17 +2,20 @@ import datetime
 import io
 import json
 import logging
+import asyncio
 from decimal import Decimal, InvalidOperation
 from typing import Literal, get_args
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.services.scheduling import find_conflict, lock_schedule
 from app.core.database import get_db
+from app.core.config import settings
 from app.models import Item, Person, Preset, Quote, QuoteItem, Reservation, User
 from app.routers.auth import RoleChecker
 from app.schemas.presets import ComponentSchema, MarginSchema
@@ -119,6 +122,10 @@ def _clean_row(entity: str, data: dict) -> dict:
             data["total_amount"] = total  # never trust the CSV's total
 
         elif entity == "reservations":
+            start = parse_datetime(data.get("reservation_date"))
+            if not isinstance(start, datetime.datetime) or start.tzinfo is None:
+                raise ValueError("date")
+            
             if not 0 < int(data.get("duration_minutes", 30)) <= 1440:
                 raise ValueError("duration")
             if (
@@ -147,6 +154,65 @@ def _clean_row(entity: str, data: dict) -> dict:
     return data
 
 
+_JSON_COLS = {
+    "quotes": ("items", "patient", "staff"),
+    "items": ("category",),
+    "reservations": ("patient", "staff"),
+    "presets": ("elements", "margins"),
+}
+_MODELS = {
+    "quotes": Quote,
+    "items": Item,
+    "reservations": Reservation,
+    "presets": Preset,
+}
+
+
+def _parse_csv(contents: bytes) -> list[dict]:
+    pd = _pd()
+    df = pd.read_csv(io.BytesIO(contents))
+    if len(df) > 5000:
+        raise ValueError("too many rows")
+    df = df.astype(object).where(pd.notnull(df), None).map(_csv_unsafe)
+    return df.to_dict(orient="records")
+
+
+def _as_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _existing(db, model, ids) -> set[int]:
+    ids = {i for i in map(_as_int, ids) if i is not None}
+    if not ids:
+        return set()
+    return set((await db.execute(select(model.id).where(model.id.in_(ids)))).scalars())
+
+
+async def _visible_persons(db, ids, actor) -> set[int]:
+    found = await _existing(db, Person, ids)
+    if actor.role.name.lower() != "admin":
+        admin_id = (
+            await db.execute(select(Person.id).where(Person.email == settings.ADMIN_EMAIL))
+        ).scalar_one_or_none()
+        found.discard(admin_id)
+    return found
+
+
+def _collect_refs(row: dict, person_ids: set, item_ids: set) -> None:
+    p, s = row.get("patient"), row.get("staff")
+    if isinstance(p, dict):
+        person_ids.add(p.get("id"))
+    if isinstance(s, dict):
+        person_ids.add(s.get("id"))
+    elif isinstance(s, list):
+        person_ids.update(x.get("id") for x in s if isinstance(x, dict))
+    if isinstance(row.get("items"), list):
+        item_ids.update(i.get("item_id") for i in row["items"] if isinstance(i, dict))
+
+
 @router.post("/export/{entity}")
 async def export_data(
     entity: Entity,
@@ -161,6 +227,8 @@ async def export_data(
         raise HTTPException(400, "No IDs provided for export")
 
     data = []
+    is_admin = current_user.role.name.lower() == "admin"
+    admin_p = Person.email == settings.ADMIN_EMAIL
     if entity == "quotes":
         # Deep load all nested models for full serialization
         stmt = (
@@ -172,6 +240,8 @@ async def export_data(
                 selectinload(Quote.quote_items).selectinload(QuoteItem.item),
             )
         )
+        if not is_admin:
+            stmt = stmt.where(~Quote.patient.has(admin_p))
         for r in (await db.execute(stmt)).scalars().all():
             patient_data = (
                 {
@@ -244,6 +314,10 @@ async def export_data(
             .where(Reservation.id.in_(ids))
             .options(selectinload(Reservation.patient), selectinload(Reservation.staff))
         )
+        if not is_admin:
+            stmt = stmt.where(
+                ~Reservation.patient.has(admin_p), ~Reservation.staff.any(admin_p)
+            )
         for r in (await db.execute(stmt)).scalars().all():
             patient_data = (
                 {
@@ -299,118 +373,67 @@ async def export_data(
 
 @router.post("/validate/{entity}")
 async def validate_import(
-    entity: str,
+    entity: Entity,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
-    """Parses a CSV upload and checks the database for conflicts and missing relations from nested objects."""
-    pd = _pd()
-    contents = await file.read()
+    contents = await file.read(5_000_001)
     if len(contents) > 5_000_000:
         raise HTTPException(413, "CSV too large (max 5 MB)")
     try:
-        df = pd.read_csv(io.BytesIO(contents))
-        df = df.where(pd.notnull(df), None)
-        df = df.map(_csv_unsafe)
-    except Exception as e:
-        raise HTTPException(400, f"Failed to parse CSV: {str(e)}")
+        rows = await asyncio.to_thread(_parse_csv, contents)
+    except Exception:
+        raise HTTPException(400, "Failed to parse CSV (max 5000 rows).")
 
-    rows = df.to_dict(orient="records")
-    results = []
-
+    # pass 1: decode nested JSON columns
+    row_errors: list[list[str]] = []
     for row in rows:
-        row_id = row.get("id")
-        status = "ok"
-        errors = []
-
-        # Decode full JSON relationships
-        if entity == "quotes":
-            for col in ["items", "patient", "staff"]:
-                if col in row and isinstance(row[col], str):
-                    try:
-                        row[col] = json.loads(row[col])
-                    except:
-                        errors.append(f"Invalid JSON format in '{col}' column.")
-        elif entity == "items":
-            if "category" in row and isinstance(row["category"], str):
+        errs = []
+        for col in _JSON_COLS[entity]:
+            if isinstance(row.get(col), str):
                 try:
-                    row["category"] = json.loads(row["category"])
-                except:
-                    errors.append("Invalid JSON format in 'category' column.")
-        elif entity == "reservations":
-            for col in ["patient", "staff"]:
-                if col in row and isinstance(row[col], str):
-                    try:
-                        row[col] = json.loads(row[col])
-                    except:
-                        errors.append(f"Invalid JSON format in '{col}' column.")
-        elif entity == "presets":
-            for col in ["elements", "margins"]:
-                if col in row and isinstance(row[col], str):
-                    try:
-                        row[col] = json.loads(row[col])
-                    except:
-                        errors.append(f"Invalid JSON format in '{col}' column.")
+                    row[col] = json.loads(row[col])
+                except ValueError:
+                    errs.append(f"Invalid JSON format in '{col}' column.")
+        row_errors.append(errs)
 
-        # Existence validation
-        if row_id:
-            exists = False
-            if entity == "quotes":
-                exists = await db.get(Quote, row_id)
-            elif entity == "items":
-                exists = await db.get(Item, row_id)
-            elif entity == "reservations":
-                exists = await db.get(Reservation, row_id)
-            elif entity == "presets":
-                exists = await db.get(Preset, row_id)
+    # pass 2: one query per table instead of one per row
+    person_ids, item_ids = set(), set()
+    for row in rows:
+        _collect_refs(row, person_ids, item_ids)
+    found = await _existing(db, _MODELS[entity], (r.get("id") for r in rows))
+    ok_persons = await _visible_persons(db, person_ids, current_user)
+    ok_items = await _existing(db, Item, item_ids)
 
-            if exists:
-                status = "conflict"
-        else:
+    results = []
+    for row, errors in zip(rows, row_errors):
+        row_id, status = row.get("id"), "ok"
+        if row_id is None:
             errors.append("Missing primary 'id'.")
             status = "error"
+        elif _as_int(row_id) in found:
+            status = "conflict"
 
-        # Relational validation using extracted nested IDs
+        if entity in ("quotes", "reservations"):
+            p = row.get("patient")
+            pid = p.get("id") if isinstance(p, dict) else None
+            if _as_int(pid) not in ok_persons:
+                errors.append(f"Patient ID {pid} does not exist.")
         if entity == "quotes":
-            patient_id = (
-                row.get("patient", {}).get("id")
-                if isinstance(row.get("patient"), dict)
-                else None
-            )
-            staff_id = (
-                row.get("staff", {}).get("id")
-                if isinstance(row.get("staff"), dict)
-                else None
-            )
-
-            if not patient_id or not await db.get(Person, patient_id):
-                errors.append(f"Patient ID {patient_id} does not exist.")
-            if staff_id and not await db.get(Person, staff_id):
-                errors.append(f"Staff ID {staff_id} does not exist.")
-
-            items = row.get("items", [])
-            if isinstance(items, list):
-                for item in items:
-                    item_id = item.get("item_id")
-                    if not item_id or not await db.get(Item, item_id):
-                        errors.append(f"Item ID {item_id} does not exist.")
-
+            s = row.get("staff")
+            sid = s.get("id") if isinstance(s, dict) else None
+            if sid and _as_int(sid) not in ok_persons:
+                errors.append(f"Staff ID {sid} does not exist.")
+            for it in row.get("items") or []:
+                iid = it.get("item_id") if isinstance(it, dict) else None
+                if _as_int(iid) not in ok_items:
+                    errors.append(f"Item ID {iid} does not exist.")
         elif entity == "reservations":
-            patient_id = (
-                row.get("patient", {}).get("id")
-                if isinstance(row.get("patient"), dict)
-                else None
-            )
-            if not patient_id or not await db.get(Person, patient_id):
-                errors.append(f"Patient ID {patient_id} does not exist.")
-
-            staff_list = row.get("staff", [])
-            if isinstance(staff_list, list):
-                for s in staff_list:
-                    s_id = s.get("id")
-                    if not s_id or not await db.get(Person, s_id):
-                        errors.append(f"Staff ID {s_id} does not exist.")
+            for s in row.get("staff") or []:
+                sid = s.get("id") if isinstance(s, dict) else None
+                if _as_int(sid) not in ok_persons:
+                    errors.append(f"Staff ID {sid} does not exist.")
 
         results.append(
             {
@@ -420,7 +443,6 @@ async def validate_import(
                 "data": row,
             }
         )
-
     return results
 
 
@@ -433,6 +455,16 @@ async def commit_import(
 ):
     """Executes bulk inserts and updates within a single transaction from serialized nested objects."""
     actions = payload.actions
+    
+    person_ids, item_ids = set(), set()
+    for act in actions:
+        if act.selected_action in ("new", "update"):
+            _collect_refs(act.data, person_ids, item_ids)
+    ok_persons = await _visible_persons(db, person_ids, current_user)
+    ok_items = await _existing(db, Item, item_ids)
+    
+    if entity == "reservations":
+        await lock_schedule(db)
 
     for act in actions:
         action = act.selected_action
@@ -445,6 +477,27 @@ async def commit_import(
             data.pop("id", None)  # Let the DB assign a fresh ID
 
         data = _clean_row(entity, data)
+        
+        refs_p, refs_i = set(), set()
+        _collect_refs(data, refs_p, refs_i)
+        refs_p.discard(None)
+        refs_i.discard(None)
+        if {_as_int(i) for i in refs_p} - ok_persons or {_as_int(i) for i in refs_i} - ok_items:
+            raise HTTPException(422, "Import references records that do not exist. Nothing was saved.")
+
+        if entity == "reservations":
+            p = data.get("patient")
+            staff_ids = [s["id"] for s in data.get("staff") or [] if isinstance(s, dict) and s.get("id")]
+            msg = await find_conflict(
+                db,
+                parse_datetime(data["reservation_date"]),
+                int(data.get("duration_minutes", 30)),
+                p.get("id") if isinstance(p, dict) else None,
+                staff_ids,
+                exclude_id=data.get("id") if action == "update" else None,
+            )
+            if msg:
+                raise HTTPException(409, f"Reservation conflict: {msg} Nothing was saved.")
 
         try:
             if entity == "quotes":
@@ -553,6 +606,11 @@ async def commit_import(
                 db_obj.margins = data.get("margins")
                 if action == "new":
                     db.add(db_obj)
+                await db.flush()
+                if db_obj.is_active:
+                    await db.execute(
+                        update(Preset).where(Preset.id != db_obj.id).values(is_active=False)
+                    )
 
         except Exception:
             await db.rollback()

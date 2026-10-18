@@ -1,4 +1,3 @@
-from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.models import Person, User, Reservation
 from app.routers.auth import get_current_user, RoleChecker
+from app.services.scheduling import find_conflict, lock_schedule
 from app.schemas.reservations import (
     ReservationCreate,
     ReservationListResponse,
@@ -36,14 +36,9 @@ async def create_reservation(
             status.HTTP_403_FORBIDDEN,
             detail="Self-only access permitted. Must be assigned as staff.",
         )
+        
+    await lock_schedule(db)
 
-    # 1. Calculate time windows for overlap checking
-    start_time = payload.reservation_date
-    end_time = start_time + timedelta(minutes=payload.duration_minutes)
-
-    # Narrow DB search window to +/- 12 hours for performance
-    window_start = start_time - timedelta(hours=12)
-    window_end = start_time + timedelta(hours=12)
 
     # 2. Verify patient exists
     patient = await db.get(Person, payload.patient_id)
@@ -52,28 +47,8 @@ async def create_reservation(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
         )
 
-    # 3. Check Patient double-booking
-    patient_reservations = (
-        (
-            await db.execute(
-                select(Reservation).where(
-                    Reservation.patient_id == payload.patient_id,
-                    Reservation.reservation_date >= window_start,
-                    Reservation.reservation_date <= window_end,
-                )
-            )
-        )
-        .scalars()
-        .all()
-    )
+    
 
-    for res in patient_reservations:
-        res_end = res.reservation_date + timedelta(minutes=res.duration_minutes)
-        if start_time < res_end and end_time > res.reservation_date:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Patient has a scheduling conflict during this time.",
-            )
 
     # 4. Verify staff exist and check Staff double-booking
     staff_members = (
@@ -88,29 +63,12 @@ async def create_reservation(
             detail="One or more staff IDs are invalid.",
         )
 
-    staff_reservations = (
-        (
-            await db.execute(
-                select(Reservation)
-                .join(Reservation.staff)
-                .where(
-                    Person.id.in_(payload.staff_ids),
-                    Reservation.reservation_date >= window_start,
-                    Reservation.reservation_date <= window_end,
-                )
-            )
-        )
-        .scalars()
-        .all()
+    msg = await find_conflict(
+        db, payload.reservation_date, payload.duration_minutes,
+        payload.patient_id, payload.staff_ids,
     )
-
-    for res in staff_reservations:
-        res_end = res.reservation_date + timedelta(minutes=res.duration_minutes)
-        if start_time < res_end and end_time > res.reservation_date:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="One or more selected staff members have a scheduling conflict.",
-            )
+    if msg:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
 
     # 5. Create Reservation
     reservation = Reservation(
@@ -181,6 +139,8 @@ async def update_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
+        
+    await lock_schedule(db)
 
     reservation = await db.get(Reservation, reservation_id)
     if not reservation:
@@ -203,46 +163,7 @@ async def update_reservation(
     target_patient_id = update_data.get("patient_id", reservation.patient_id)
     target_staff_ids = update_data.get("staff_ids", [s.id for s in reservation.staff])
 
-    start_time = target_date
-    end_time = start_time + timedelta(minutes=target_duration)
-    window_start = start_time - timedelta(hours=12)
-    window_end = start_time + timedelta(hours=12)
-
-    # 1. Check Patient double-booking
-    if (
-        "reservation_date" in update_data
-        or "duration_minutes" in update_data
-        or "patient_id" in update_data
-    ):
-        patient_reservations = (
-            (
-                await db.execute(
-                    select(Reservation).where(
-                        Reservation.id != reservation_id,
-                        Reservation.patient_id == target_patient_id,
-                        Reservation.reservation_date >= window_start,
-                        Reservation.reservation_date <= window_end,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-        for res in patient_reservations:
-            res_end = res.reservation_date + timedelta(minutes=res.duration_minutes)
-            if start_time < res_end and end_time > res.reservation_date:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Patient has a scheduling conflict during this time.",
-                )
-
-    # 2. Check Staff double-booking & fetch updated staff list
-    if (
-        "reservation_date" in update_data
-        or "duration_minutes" in update_data
-        or "staff_ids" in update_data
-    ):
+    if "staff_ids" in update_data:
         staff_members = (
             (await db.execute(select(Person).where(Person.id.in_(target_staff_ids))))
             .scalars()
@@ -254,34 +175,18 @@ async def update_reservation(
                 detail="One or more staff IDs are invalid.",
             )
 
-        staff_reservations = (
-            (
-                await db.execute(
-                    select(Reservation)
-                    .join(Reservation.staff)
-                    .where(
-                        Reservation.id != reservation_id,
-                        Person.id.in_(target_staff_ids),
-                        Reservation.reservation_date >= window_start,
-                        Reservation.reservation_date <= window_end,
-                    )
-                )
-            )
-            .scalars()
-            .all()
+    if any(k in update_data for k in ("reservation_date", "duration_minutes", "patient_id", "staff_ids")):
+        msg = await find_conflict(
+            db, target_date, target_duration, target_patient_id,
+            target_staff_ids, exclude_id=reservation_id,
         )
+        if msg:
+            raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
 
-        for res in staff_reservations:
-            res_end = res.reservation_date + timedelta(minutes=res.duration_minutes)
-            if start_time < res_end and end_time > res.reservation_date:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="One or more selected staff members have a scheduling conflict.",
-                )
+    if "staff_ids" in update_data:
+        reservation.staff.clear()
+        reservation.staff.extend(staff_members)
 
-        if "staff_ids" in update_data:
-            reservation.staff.clear()
-            reservation.staff.extend(staff_members)
 
     # 3. Apply standard scalar updates
     if "description" in update_data:

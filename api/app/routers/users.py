@@ -1,5 +1,6 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
+import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
@@ -20,6 +21,20 @@ allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
 allow_all_staff = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
 )
+
+ROLE_RANK = {
+    "admin": 0,
+    "manager": 1,
+    "secretary": 2,
+    "doctor": 2,
+    "assistant": 2,
+    "employee": 3,
+    "client": 4,
+}
+
+
+def _rank(role_name: str) -> int:
+    return ROLE_RANK.get(role_name.lower(), 99)
 
 
 # ---------------------------------------------------------
@@ -48,17 +63,18 @@ async def _guard(
     """Only an admin may touch an admin account or hand out the Admin role."""
     if _is_admin(actor):
         return
-    if target is not None and _is_admin(target):
+    me = _rank(actor.role.name)
+    if target is not None and target.id != actor.id and _rank(target.role.name) <= me:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            detail="Only an admin can modify an admin account.",
+            detail="You can only modify accounts with a lower role than yours.",
         )
     if new_role_id is not None:
         role = await db.get(Role, new_role_id)
-        if role and role.name.lower() == "admin":
+        if role and _rank(role.name) <= me:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
-                detail="Only an admin can assign the Admin role.",
+                detail="You can only assign roles lower than your own.",
             )
 
 
@@ -68,7 +84,7 @@ async def _guard(
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: UserCreate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
     await _guard(db, current_user, new_role_id=payload.role_id)  # <-- NEW
@@ -98,7 +114,7 @@ async def create_user(
     new_user = User(
         person_id=payload.person_id,
         role_id=payload.role_id,
-        hashed_password=get_password_hash(payload.password),
+        hashed_password=await asyncio.to_thread(get_password_hash, payload.password),
         is_active=payload.is_active,
     )
     db.add(new_user)
@@ -245,7 +261,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     payload: UserUpdate,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
     user = (
@@ -296,7 +312,9 @@ async def update_user(
         )
 
     if update_data.get("password"):
-        user.hashed_password = get_password_hash(update_data.pop("password"))
+        user.hashed_password = await asyncio.to_thread(
+            get_password_hash, update_data.pop("password")
+        )
     else:
         update_data.pop("password", None)
 
@@ -311,7 +329,7 @@ async def update_user(
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(RoleChecker(["admin"])),
 ):
     user = await db.get(User, user_id)

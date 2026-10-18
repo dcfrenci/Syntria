@@ -82,6 +82,7 @@ async def quotes():
                     title="Delete Quote?",
                     description="Are you sure you want to permanently delete this quote and all its details?",
                     on_save_callback=on_save_callback,
+                    single_use=True
                 ).open()
 
         async def handle_quote_action(action: str):
@@ -349,7 +350,7 @@ async def quote_detail(
         # Service selection and teeth selection
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
 
-            raw_services = await ServicesClient.get_items()
+            raw_services = await ServicesClient.get_items(is_active=True)
 
             services = [
                 {
@@ -364,6 +365,8 @@ async def quote_detail(
                 }
                 for s in raw_services
             ]
+            
+            active_selected = {"id": None}
 
             def refresh_selected_table():
                 table_selected.rows = format_selected_rows()
@@ -427,8 +430,10 @@ async def quote_detail(
                     open_teeth_modal(row)
 
             def save_teeth_selection(selected_teeth: set):
-                global active_selected_id
-                row_id = active_selected_id
+                row_id = active_selected["id"]
+                if row_id not in services_selected:
+                    ui.notify("Selected service no longer exists", type="warning")
+                    return
                 services_selected[row_id]["teeth"] = sorted(
                     [int(t) for t in selected_teeth]
                 )
@@ -439,7 +444,6 @@ async def quote_detail(
                 )
 
             def open_teeth_modal(selected_item: dict | None):
-                global active_selected_id
 
                 if selected_item is None:
                     if not table_selected.selected:
@@ -456,7 +460,7 @@ async def quote_detail(
                     )
                     return
 
-                row_id = active_selected_id = selected_item["id"]
+                row_id = active_selected["id"] = selected_item["id"]
 
                 current_teeth = [
                     str(t) for t in services_selected[row_id].get("teeth", [])
@@ -593,6 +597,7 @@ async def quote_detail(
                     title="Exit Quote?",
                     description="Are you sure you want to exit without saving? All recent changes will be lost.",
                     on_save_callback=on_save_callback,
+                    single_use=True
                 ).open()
 
             async def save_quote():
@@ -638,17 +643,18 @@ async def quote_detail(
                         res = await QuotesClient.update_quote(id, quote)
                     else:
                         res = await QuotesClient.create_quote(quote)
-                        ui.navigate.to(f"/home/quote_edit/{res["id"]}")
-
-                    if res:
-                        ui.notify("Quote saved successfully", type="positive")
-                    else:
+                    if not res:
                         ui.notify("Error while saving the quote", type="negative")
+                        return
+                    ui.notify("Quote saved successfully", type="positive")
+                    if not id:
+                        ui.navigate.to(f"/home/quote_edit/{res['id']}")
 
                 confirmation_modal(
                     title="Save Quote?",
                     description="Are you sure you want to save this quote and its selected services?",
                     on_save_callback=on_save_callback,
+                    single_use=True
                 ).open()
 
             with ui.row():

@@ -1,7 +1,9 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.schemas.persons import PersonResponse
 from app.schemas.roles import RoleResponse
+from app.schemas._common import reject_null_fields
+
 
 MIN_PW = 12
 MAX_PW_BYTES = 72  # bcrypt limit
@@ -39,6 +41,10 @@ class UserUpdate(BaseModel):
         default=None, min_length=MIN_PW, description="Update password if provided"
     )
     _pw = field_validator("password")(_check_password)
+    
+    @model_validator(mode="after")
+    def _nulls(self):
+        return reject_null_fields(self, "role_id", "is_active")
 
 
 class UserResponse(BaseModel):

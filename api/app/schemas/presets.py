@@ -1,12 +1,23 @@
 import re
 from datetime import datetime
 from enum import Enum
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_ELEMENTS = 100
 MAX_IMAGE_CHARS = 3_000_000  # ~2 MB binary after base64
 MAX_TEXT_CHARS = 5_000
 _IMG_RE = re.compile(r"^data:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$")
+MAX_TOTAL_IMAGE_CHARS = 6_000_000
+
+
+def _check_total_images(v):
+    if (
+        v
+        and sum(len(e.content or "") for e in v if e.type == ComponentType.IMAGE)
+        > MAX_TOTAL_IMAGE_CHARS
+    ):
+        raise ValueError("Total image payload too large.")
+    return v
 
 
 class ComponentType(str, Enum):
@@ -47,7 +58,9 @@ class ComponentSchema(BaseModel):
         if self.type == ComponentType.IMAGE:
             # Only base64 raster images: no quotes/URLs/SVG can break out of the <img src="..."> attribute
             if len(self.content) > MAX_IMAGE_CHARS or not _IMG_RE.match(self.content):
-                raise ValueError("Image content must be a PNG/JPEG/GIF/WebP base64 data URI under ~2 MB.")
+                raise ValueError(
+                    "Image content must be a PNG/JPEG/GIF/WebP base64 data URI under ~2 MB."
+                )
         elif len(self.content) > MAX_TEXT_CHARS:
             raise ValueError("Content too long.")
         return self
@@ -56,8 +69,11 @@ class ComponentSchema(BaseModel):
 class PresetBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     is_active: bool = Field(default=False)
-    elements: list[ComponentSchema] = Field(default_factory=list, max_length=MAX_ELEMENTS)
+    elements: list[ComponentSchema] = Field(
+        default_factory=list, max_length=MAX_ELEMENTS
+    )
     margins: MarginSchema = Field(default_factory=MarginSchema)
+    _total = field_validator("elements")(_check_total_images)
 
 
 class PresetCreate(PresetBase):
@@ -67,8 +83,11 @@ class PresetCreate(PresetBase):
 class PresetUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     is_active: bool | None = None
-    elements: list[ComponentSchema] | None = Field(default=None, max_length=MAX_ELEMENTS)
+    elements: list[ComponentSchema] | None = Field(
+        default=None, max_length=MAX_ELEMENTS
+    )
     margins: MarginSchema | None = None
+    _total = field_validator("elements")(_check_total_images)
 
 
 class PresetResponse(PresetBase):

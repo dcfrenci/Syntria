@@ -2,6 +2,8 @@ import logging
 import time
 from collections import defaultdict, deque
 from typing import Annotated, List
+import asyncio
+import hashlib
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -24,6 +26,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 # --- Per-account brute-force protection (in-memory: valid because uvicorn runs ONE worker) ---
 _DUMMY_HASH = get_password_hash("dummy-password-0")
 MAX_FAILS = 5
+MAX_FAILS_PER_EMAIL = 50
 WINDOW_SECONDS = 15 * 60
 MAX_TRACKED = 10_000
 _fails: dict[str, deque[float]] = defaultdict(deque)
@@ -41,10 +44,10 @@ def _prune(key: str, now: float) -> deque[float] | None:
     return q
 
 
-def _check_throttle(key: str) -> None:
+def _check_throttle(key: str, limit: int = MAX_FAILS) -> None:
     now = time.monotonic()
     q = _prune(key, now)
-    if q is not None and len(q) >= MAX_FAILS:
+    if q is not None and len(q) >= limit:
         retry = int(WINDOW_SECONDS - (now - q[0])) + 1
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
@@ -102,11 +105,20 @@ async def get_current_user(
 
 @router.post("/token", response_model=Token, status_code=status.HTTP_200_OK)
 async def login_for_access_token(
+    request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: AsyncSession = Depends(get_db),
 ):
-    key = form_data.username.strip().lower()[:255]
-    _check_throttle(key)
+    email_key = form_data.username.strip().lower()[:255]
+    ip = (request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown"))[:64]
+    email_hash = hashlib.sha256(email_key.encode()).hexdigest()[:12]
+    pair_key = f"{ip}|{email_key}"
+    try:
+        _check_throttle(pair_key)
+        _check_throttle(email_key, MAX_FAILS_PER_EMAIL)
+    except HTTPException:
+        log.warning("login throttled ip=%s email_sha=%s", ip, email_hash)
+        raise
 
     query = (
         select(User)
@@ -117,12 +129,15 @@ async def login_for_access_token(
     user = (await db.execute(query)).scalar_one_or_none()
 
     # Always run bcrypt, even for unknown emails, so timing doesn't reveal which emails exist
-    password_ok = verify_password(
-        form_data.password, user.hashed_password if user else _DUMMY_HASH
+    password_ok = await asyncio.to_thread(
+        verify_password,
+        form_data.password,
+        user.hashed_password if user else _DUMMY_HASH,
     )
     if not user or not password_ok:
-        _record_failure(key)
-        log.warning("failed login attempt")
+        _record_failure(pair_key)
+        _record_failure(email_key)
+        log.warning("failed login ip=%s email_sha=%s", ip, email_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -134,7 +149,7 @@ async def login_for_access_token(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated"
         )
 
-    _fails.pop(key, None)
+    _fails.pop(pair_key, None)
     token_data = {
         "sub": str(user.id),
         "email": user.person.email,

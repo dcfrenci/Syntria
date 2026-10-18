@@ -10,8 +10,13 @@ trap 'rm -f "$WORK.sql" "$WORK.sql.gz"' EXIT
 
 export PGPASSWORD="$POSTGRES_PASSWORD"
 
+if [ -z "${AGE_RECIPIENT:-}" ] && [ "${ALLOW_PLAINTEXT_BACKUP:-false}" != "true" ]; then
+  echo "[backup] AGE_RECIPIENT not set: refusing to write a plaintext dump (ALLOW_PLAINTEXT_BACKUP=true to override)" >&2
+  exit 1
+fi
+
 echo "[backup] dumping $POSTGRES_DB"
-pg_dump -h db -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
+pg_dump -h db -p "${POSTGRES_PORT:-5432}" -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
   --no-owner --no-acl --clean --if-exists > "$WORK.sql"
 gzip -9 "$WORK.sql"
 gzip -t "$WORK.sql.gz"                                   # integrity check

@@ -62,6 +62,10 @@ async def _build_items(
     built, total = [], Decimal("0.00")
     for r in requested:
         master = items_map[r.item_id]
+        if not master.is_active and master.id not in (existing_prices or {}):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, detail=f"Item '{master.name}' is not active."
+            )
         # keep the price already quoted to the patient when editing; use today's price for new lines
         unit_price = (existing_prices or {}).get(master.id, master.price)
         line_total = max(unit_price * r.quantity - r.discount, Decimal("0.00"))
@@ -75,6 +79,9 @@ async def _build_items(
                 teeth=r.teeth,
             )
         )
+        
+    if total > Decimal("99999999.99"):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Quote total too large.")
     return built, total
 
 

@@ -1,6 +1,8 @@
 from datetime import date, datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 from app.schemas.reminders import ReminderPreferenceResponse
+from app.schemas._common import reject_null_fields
+
 
 
 # --- Person Schemas ---
@@ -24,6 +26,10 @@ class PersonUpdate(BaseModel):
     birth_date: date | None = None
     phone_number: str | None = Field(default=None, max_length=20)
     reminder_preference_id: int | None = None
+    
+    @model_validator(mode="after")
+    def _nulls(self):
+        return reject_null_fields(self, "first_name", "last_name", "email")
 
 
 class PersonResponse(PersonBase):

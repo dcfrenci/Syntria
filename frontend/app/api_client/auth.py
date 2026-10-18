@@ -8,13 +8,12 @@ load_dotenv()
 BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
 
 
-async def authenticate(username: str, password: str):
-    """Returns the token dict on success, None on bad credentials,
-    or {"error": "rate_limited" | "unavailable"}."""
+async def authenticate(username: str, password: str, client_ip: str | None = None):
     data = {"username": username, "password": password}
+    headers = {"X-Real-IP": client_ip} if client_ip and client_ip != "unknown" else {}
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            response = await client.post(f"{BASE_URL}/auth/token", data=data)
+            response = await client.post(f"{BASE_URL}/auth/token", data=data, headers=headers)
         except httpx.HTTPError:
             return {"error": "unavailable"}
     if response.status_code == 200:

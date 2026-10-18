@@ -48,7 +48,7 @@ class APIClient:
             raise  # propagate status errors (403, 409...) to the UI
         except httpx.HTTPError as e:
             log.error("%s %s failed: %s", method, endpoint, e)
-            return None
+            raise
 
     @staticmethod
     async def get(endpoint: str, params: dict | None = None) -> dict | list | None:

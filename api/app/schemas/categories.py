@@ -1,11 +1,17 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from app.schemas._common import reject_null_fields
+
 
 
 class CategoryBase(BaseModel):
-    name:           str = Field(..., min_length=2, max_length=50, examples=["Orthodontics"])
-    description:    str | None = Field(default=None, max_length=255, examples=["Teeth alignment and braces"])
-    is_active:      bool = Field(default=True, description="Whether the category is available for selection")
+    name: str = Field(..., min_length=2, max_length=50, examples=["Orthodontics"])
+    description: str | None = Field(
+        default=None, max_length=255, examples=["Teeth alignment and braces"]
+    )
+    is_active: bool = Field(
+        default=True, description="Whether the category is available for selection"
+    )
 
 
 class CategoryCreate(CategoryBase):
@@ -13,13 +19,17 @@ class CategoryCreate(CategoryBase):
 
 
 class CategoryUpdate(BaseModel):
-    name:           str | None = Field(default=None, min_length=2, max_length=50)
-    description:    str | None = Field(default=None, max_length=255)
-    is_active:      bool | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=50)
+    description: str | None = Field(default=None, max_length=255)
+    is_active: bool | None = None
+    
+    @model_validator(mode="after")
+    def _nulls(self):
+        return reject_null_fields(self, "name", "is_active")
 
 
 class CategoryResponse(CategoryBase):
-    id:         int
+    id: int
     created_at: datetime
     updated_at: datetime | None = None
 
@@ -27,5 +37,5 @@ class CategoryResponse(CategoryBase):
 
 
 class CategoryListResponse(BaseModel):
-    total:      int
+    total: int
     categories: list[CategoryResponse]

@@ -52,12 +52,16 @@ class DataClient(APIClient):
     async def export_csv(cls, entity: str, ids: list[int]):
         """Requests the bulk export from the backend and triggers a local file download."""
         # Using httpx directly because APIClient expects JSON responses, not raw CSV files
-        async with httpx.AsyncClient() as client:
-            res = await client.post(
-                f"{BASE_URL}/import_export/export/{entity}",
-                json={"ids": ids},
-                headers=cls._get_headers()
-            )
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                res = await client.post(
+                    f"{BASE_URL}/import_export/export/{entity}",
+                    json={"ids": ids},
+                    headers=cls._get_headers()
+                )
+            except httpx.HTTPError:
+                ui.notify("Server did not respond in time.", type="negative")
+                return []
             if res.status_code == 200:
                 ui.download(res.content, f"{entity}_export.csv")
                 ui.notify(f"Successfully exported {len(ids)} {entity}.", type='positive')
@@ -68,13 +72,17 @@ class DataClient(APIClient):
     async def validate_import(cls, entity: str, file_bytes: bytes):
         """Sends raw CSV bytes to the backend for relational conflict validation."""
         # Using httpx directly because APIClient likely doesn't support 'files=' multipart uploads
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             files = {"file": ("upload.csv", file_bytes, "text/csv")}
-            res = await client.post(
-                f"{BASE_URL}/import_export/validate/{entity}",
-                files=files,
-                headers=cls._get_headers()
-            )
+            try:
+                res = await client.post(
+                    f"{BASE_URL}/import_export/validate/{entity}",
+                    files=files,
+                    headers=cls._get_headers()
+                )
+            except httpx.HTTPError:
+                ui.notify("Server did not respond in time.", type="negative")
+                return []
             if res.status_code == 200:
                 return res.json()
             

@@ -6,6 +6,7 @@ from api_client.persons import PersonsClient
 from api_client.reminders import RemindersClient
 from api_client.users import UsersClient
 from api_client.roles import RolesClient
+from components.modals import delete_on_close
 
 
 class PersonModal:
@@ -97,6 +98,8 @@ class PersonModal:
                     "flat text-color=gray-600"
                 )
                 ui.button("Save", on_click=self.save).props("unelevated color=primary")
+                
+        delete_on_close(self.dialog)
 
     async def save(self):
         # Validation for all required fields
@@ -231,6 +234,8 @@ class UserModal:
                     "flat text-color=gray-600"
                 )
                 ui.button("Save", on_click=self.save).props("unelevated color=primary")
+            
+        delete_on_close(self.dialog)
 
     async def save(self):
         if not self.user_data["person_id"] or not self.user_data["role_id"]:

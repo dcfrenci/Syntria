@@ -190,7 +190,8 @@ async def persons_page():
                         }
                         for u in raw
                     ]
-                except Exception:
+                except Exception as e:
+                    handle_api_error(e, "load users")
                     return []
 
             async def refresh_users():

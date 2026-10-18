@@ -1,7 +1,13 @@
 import os
 import sys
 import requests
-from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD, DEMO_PASSWORD, require_demo_password
+from common import (
+    BASE_URL,
+    ADMIN_EMAIL,
+    ADMIN_PASSWORD,
+    DEMO_PASSWORD,
+    require_demo_password,
+)
 
 # Users extracted directly from seed_data.py
 TEST_USERS = [
@@ -103,7 +109,7 @@ EXPECTED_ALLOWED = {
         "Employee",
     ],
     ("GET", "/users/1"): ["Admin", "Manager", "Secretary"],
-    ("PATCH", "/users/1"): ["Admin"],
+    ("PATCH", "/users/1"): ["Admin", "Manager"],
     ("DELETE", "/users/1"): ["Admin"],
     ("GET", "/users/reservations?start_date=2026-01-01"): [
         "Admin",
@@ -193,7 +199,7 @@ EXPECTED_ALLOWED = {
     ("GET", "/presets/"): ["Admin", "Manager", "Secretary", "Doctor"],
     ("POST", "/presets/"): ["Admin", "Manager", "Secretary"],
     ("GET", "/presets/1"): ["Admin", "Manager", "Secretary", "Doctor"],
-    ("PATCH", "/presets/1"): ["Admin", "Manager"],
+    ("PATCH", "/presets/1"): ["Admin", "Manager", "Secretary"],
     ("DELETE", "/presets/1"): ["Admin", "Manager"],
     ("GET", "/reminders/"): [
         "Admin",
@@ -208,6 +214,17 @@ EXPECTED_ALLOWED = {
     ("POST", "/import_export/validate/items"): ["Admin", "Manager"],
     ("POST", "/import_export/commit/items"): ["Admin", "Manager"],
 }
+
+# Endpoints that deliberately answer 404 instead of 403 to hide existence
+NOT_FOUND_OK = {("GET", "/quotes/1")}
+ADMIN_TOKEN = None
+PERSON_BY_EMAIL: dict[str, int] = {}
+
+
+def _get(path, token):
+    return requests.get(
+        f"{BASE_URL}{path}", headers={"Authorization": f"Bearer {token}"}
+    )
 
 
 def test_all_endpoints(token: str, role_name: str):
@@ -240,7 +257,7 @@ def test_all_endpoints(token: str, role_name: str):
         (
             "POST",
             "/users/",
-            {"person_id": 999, "role_id": 2, "password": DEMO_PASSWORD},
+            {"person_id": 999, "role_id": 4, "password": DEMO_PASSWORD},
             None,
         ),
         ("GET", "/users/me", None, None),
@@ -313,16 +330,22 @@ def test_all_endpoints(token: str, role_name: str):
             {"file": ("test.csv", b"id,name\n1,test", "text/csv")},
         ),
         ("POST", "/import_export/commit/items", {"actions": []}, None),
-    ]    
+    ]
 
     for method, path, payload, files in endpoints:
+
+        real_path = (
+            path.replace("/1", "/999999")
+            if method in ("PATCH", "DELETE") and path.endswith("/1")
+            else path
+        )
         is_allowed = role_name in EXPECTED_ALLOWED.get((method, path), [])
 
         if path == "/health":
             url = f"{BASE_URL}{path}"
             res_callable = lambda: requests.get(url)
         else:
-            url = f"{BASE_URL}{path}"
+            url = f"{BASE_URL}{real_path}"
             if method == "GET":
                 res_callable = lambda: requests.get(url, headers=headers)
             elif method == "POST":
@@ -348,24 +371,16 @@ def test_all_endpoints(token: str, role_name: str):
             status_code = res.status_code
 
             # Evaluate correctness
-            is_correct = False
-
-            
-            is_item_endpoint = path.endswith("/1")
-            expected_desc = (
-                "!= 403"
-                if is_allowed
-                else ("403/404" if is_item_endpoint else "== 403")
-            )
-
-            if is_allowed and status_code != 403:
-                is_correct = True
-            elif not is_allowed:
-                if status_code == 403:
-                    is_correct = True
-                # Accept 404 for item endpoints because earlier tests (Admin) legally deleted the item
-                elif is_item_endpoint and status_code == 404:
-                    is_correct = True
+            if is_allowed:
+                is_correct = status_code not in (401, 403) and status_code < 500
+                expected_desc = "not 401/403/5xx"
+            else:
+                is_correct = status_code == 403 or (
+                    status_code == 404 and (method, path) in NOT_FOUND_OK
+                )
+                expected_desc = (
+                    "403/404" if (method, path) in NOT_FOUND_OK else "== 403"
+                )
 
             judgment = "[CORRECT]" if is_correct else "[WRONG]"
             if is_correct:
@@ -396,9 +411,92 @@ def test_all_endpoints(token: str, role_name: str):
     return [correct, wrong, percentage]
 
 
+def test_scoped_access(token: str, role_name: str, me: int | None):
+    role = role_name.lower()
+    if role == "admin":
+        return [0, 0, 100.0]
+    results = []
+
+    def check(desc, ok):
+        results.append(bool(ok))
+        print(f"[SCOPE ] {desc:<62} {'[CORRECT]' if ok else '[WRONG]'}")
+
+    if role in {"manager", "secretary"}:
+        users = _get("/users/?limit=100", token).json().get("users", [])
+        check(
+            "admin account hidden from /users/",
+            all(u["person"]["email"] != ADMIN_EMAIL for u in users),
+        )
+    if role in {"manager", "secretary", "doctor", "assistant"}:
+        persons = _get("/persons/?limit=100", token).json().get("persons", [])
+        check(
+            "admin person hidden from /persons/",
+            all(p["email"] != ADMIN_EMAIL for p in persons),
+        )
+
+    if role in {"doctor", "assistant", "employee", "client"} and me is not None:
+        key = "staff" if role == "doctor" else "patient"
+        admin_quotes = _get("/quotes/?limit=100", ADMIN_TOKEN).json()["quotes"]
+        mine = _get("/quotes/?limit=100", token).json()["quotes"]
+        check(
+            "/quotes/ lists only own",
+            all((q.get(key) or {}).get("id") == me for q in mine),
+        )
+        foreign = next(
+            (q for q in admin_quotes if (q.get(key) or {}).get("id") != me), None
+        )
+        if foreign:
+            check(
+                f"GET /quotes/{foreign['id']} (foreign) -> 404",
+                _get(f"/quotes/{foreign['id']}", token).status_code == 404,
+            )
+
+        foreign_pid = next(
+            (q["patient"]["id"] for q in admin_quotes if q["patient"]["id"] != me), None
+        )
+        if foreign_pid:
+            r = _get(
+                f"/users/reservations?start_date=2026-01-01&user_id={foreign_pid}",
+                token,
+            )
+            check("foreign /users/reservations -> 403", r.status_code == 403)
+            if role == "client":
+                check(
+                    "client GET /persons/{foreign} -> 403",
+                    _get(f"/persons/{foreign_pid}", token).status_code == 403,
+                )
+
+        if role in {"doctor", "assistant", "client"}:
+            own = (
+                (lambda r: r["patient"]["id"] == me)
+                if role == "client"
+                else (lambda r: me in [s["id"] for s in r["staff"]])
+            )
+            rs = _get("/reservations/?limit=100", token).json()["reservations"]
+            check("/reservations/ lists only own", all(own(r) for r in rs))
+            admin_rs = _get("/reservations/?limit=100", ADMIN_TOKEN).json()[
+                "reservations"
+            ]
+            f = next((r for r in admin_rs if not own(r)), None)
+            if f:
+                check(
+                    f"GET /reservations/{f['id']} (foreign) -> 403",
+                    _get(f"/reservations/{f['id']}", token).status_code == 403,
+                )
+
+    wrong = results.count(False)
+    return [
+        len(results) - wrong,
+        wrong,
+        100.0 * (len(results) - wrong) / len(results) if results else 100.0,
+    ]
+
+
 def main():
     print("Starting Permissions Test Script...\n")
     
+    global ADMIN_TOKEN
+
     require_demo_password()
 
     score = []
@@ -416,7 +514,16 @@ def main():
                 continue
 
             token = response.json().get("access_token")
+            if user["role"] == "Admin":   # Admin is first in TEST_USERS
+                ADMIN_TOKEN = token
+                PERSON_BY_EMAIL.update(
+                    {u["person"]["email"]: u["person"]["id"]
+                     for u in _get("/users/?limit=100", token).json()["users"]}
+                )
             out = test_all_endpoints(token, user["role"])
+            sc = test_scoped_access(token, user["role"], PERSON_BY_EMAIL.get(user["email"]))
+            c, w = out[0] + sc[0], out[1] + sc[1]
+            out = [c, w, 100.0 * c / (c + w) if c + w else 0.0]
             score.append(out)
         else:
             if not is_active and response.status_code == 403:

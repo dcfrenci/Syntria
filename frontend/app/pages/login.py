@@ -49,7 +49,7 @@ def login_page():
                 ui.notify("Too many failed attempts. Try again in a few minutes.", color="negative")
                 return
 
-            result = await authenticate(username_input.value, password_input.value)
+            result = await authenticate(username_input.value, password_input.value, ip)
 
             if result and result.get("error"):
                 msg = (

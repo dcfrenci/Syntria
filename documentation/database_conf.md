@@ -38,9 +38,11 @@ The data that will be loaded using this script are divided into two sections bas
 | Client    | 10                      |
 
 ### Users
-| Person ID      | Role ID | Active | Password |
-| -------------- | ------- | ------ | -------- |
-| (Admin System) | Admin   | True   | asTf82#1 |
+| Person ID      | Role ID | Active |
+| -------------- | ------- | ------ |
+| (Admin System) | Admin   | True   |
+
+The admin is created by `docker compose exec api python -m app.cli bootstrap`, which prompts for the password. Its email is `ADMIN_EMAIL` from `.env`.
 
 ---
 
@@ -87,24 +89,26 @@ The data that will be loaded using this script are divided into two sections bas
 | Martina    | D'Amico     | marty.damico@email.com     | 14/02/2003 | 3491122334 | (WhatsApp)       |
 
 ### Users
-| Person ID                | Email                   | Role ID   | Active | Password   |
-| ------------------------ | ----------------------- | --------- | ------ | ---------- |
-| (Admin System)           | admin@email.com         | Admin     | True   | asTf82#1   |
-| (Matteo Bergamaschi)     | matteo.b@gmail.com      | Manager   | True   | kL9$zQ2w   |
-| (Valentina Bruno)        | vale.bruno@email.com    | Secretary | True   | sJ8*kP2m   |
-| (Giulia Rossi)           | giulia.rossi@email.com  | Assistant | True   | pM4@vX7c   |
-| (Marco Bianchi)          | mbianchi88@yahoo.it     | Doctor    | True   | rT2#yN9b   |
-| (Alessandro Romano)      | alex.romano@email.com   | Employee  | True   | bV5&cH1k   |
-| (Martina Colombo)        | marty.colombo@gmail.com | Client    | True   | xN7*jP4d   |
-| (Chiara Esposito)        | chiara.e@yahoo.it       | Client    | True   | mK6^bV2n   |
-| (Davide Marino)          | davide.marino@gmail.com | Client    | True   | qW1$fD5x   |
-| (Sara Russo)             | sara.russo@email.com    | Client    | True   | vC9@hJ7L   |
-| (Francesco Della Casa)   | francesco@gmai.com      | Manager   | False  | testPass1! |
-| (Lorenzo Ferrari)        | lorenzo.f@email.com     | Secretary | False  | gZ3%tR8s   |
-| (Sofia Ricci)            | s.ricci@gmail.com       | Doctor    | False  | wE8!qF3m   |
-| (Antonietta Della Bella) | antonella@email.com     | Assistant | False  | testPass1! |
-| (Giuseppe Gallo)         | ggallo@yahoo.it         | Employee  | False  | testPass1! |
-| (Elena Costa)            | elena.costa@gmail.com   | Client    | False  | testPass1! |
+| Person ID                | Email                   | Role ID   | Active |
+| ------------------------ | ----------------------- | --------- | ------ |
+| (Admin System)           | admin@email.com         | Admin     | True   |
+| (Matteo Bergamaschi)     | matteo.b@gmail.com      | Manager   | True   |
+| (Valentina Bruno)        | vale.bruno@email.com    | Secretary | True   |
+| (Giulia Rossi)           | giulia.rossi@email.com  | Assistant | True   |
+| (Marco Bianchi)          | mbianchi88@yahoo.it     | Doctor    | True   |
+| (Alessandro Romano)      | alex.romano@email.com   | Employee  | True   |
+| (Martina Colombo)        | marty.colombo@gmail.com | Client    | True   |
+| (Chiara Esposito)        | chiara.e@yahoo.it       | Client    | True   |
+| (Davide Marino)          | davide.marino@gmail.com | Client    | True   |
+| (Sara Russo)             | sara.russo@email.com    | Client    | True   |
+| (Francesco Della Casa)   | francesco@gmai.com      | Manager   | False  |
+| (Lorenzo Ferrari)        | lorenzo.f@email.com     | Secretary | False  |
+| (Sofia Ricci)            | s.ricci@gmail.com       | Doctor    | False  |
+| (Antonietta Della Bella) | antonella@email.com     | Assistant | False  |
+| (Giuseppe Gallo)         | ggallo@yahoo.it         | Employee  | False  |
+| (Elena Costa)            | elena.costa@gmail.com   | Client    | False  |
+
+All demo users share the password in `DEMO_PASSWORD` (see `scripts/common.py`). Never run the prefill in production.
 
 ### Reservations
 | Reservation Date         | Duration min. | Description                  | Patient ID          | Staff IDs                         |

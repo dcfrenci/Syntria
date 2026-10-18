@@ -12,6 +12,17 @@ from api_client.agenda import AgendaClient
 from components.calendar import Calendar
 
 
+def delete_on_close(dialog):
+    """Remove the dialog's elements once it closes, so per-click dialogs don't pile up in the session."""
+
+    def _cleanup(e):
+        if not e.value and not dialog.is_deleted:
+            dialog.delete()
+
+    dialog.on_value_change(_cleanup)
+    return dialog
+
+
 async def service_modal(title: str, on_save_callback, item_id: int | None = None):
     """Generate a dialog popup for service creation/editing."""
 
@@ -22,7 +33,11 @@ async def service_modal(title: str, on_save_callback, item_id: int | None = None
 
         category = ui.select(
             label="Select Category",
-            options={category["id"]: category["name"] for category in categories if category["is_active"]},
+            options={
+                category["id"]: category["name"]
+                for category in categories
+                if category["is_active"]
+            },
         ).classes(Style.p())
         name = ui.input("Name").classes(Style.p())
         description = ui.input("Description").classes(Style.p())
@@ -80,11 +95,12 @@ async def service_modal(title: str, on_save_callback, item_id: int | None = None
                         title="Save Service?",
                         description="Confirm you want to save this service to your catalog.",
                         on_save_callback=handle_save,
+                        single_use=True
                     ).open()
                 ],
             )
 
-    return dialog
+    delete_on_close(dialog)
 
 
 async def category_modal(title: str, on_save_callback, category_id: int | None = None):
@@ -140,11 +156,12 @@ async def category_modal(title: str, on_save_callback, category_id: int | None =
                         title="Save Category?",
                         description="Confirm you want to save this category to your catalog.",
                         on_save_callback=handle_save,
+                        single_use=True
                     ).open()
                 ],
             )
 
-    return dialog
+    delete_on_close(dialog)
 
 
 async def reservation_modal(
@@ -163,6 +180,7 @@ async def reservation_modal(
 
     # State dictionary to hold the true YYYY-MM-DD date decoupled from the UI display
     res_state = {"date": ""}
+    extra_staff = {"ids": []}
 
     async def get_calendar() -> tuple:
         target_date = (
@@ -296,6 +314,12 @@ async def reservation_modal(
             reservation = await AgendaClient.get_reservation_with_id(reservation_id)
             patient.value = reservation["patient"]["id"]
 
+            staff_ids = [s["id"] for s in reservation.get("staff", [])]
+            doctor_ids = [i for i in staff_ids if i in doctors]
+            if doctor_ids:
+                doctor.value = doctor_ids[0]
+            extra_staff["ids"] = [i for i in staff_ids if i not in doctor_ids[:1]]
+
             # Setup the custom date picker state
             raw_date = datetime.fromisoformat(reservation["reservation_date"]).strftime(
                 "%Y-%m-%d"
@@ -348,7 +372,8 @@ async def reservation_modal(
                     "duration_minutes": int(duration.value),
                     "description": description.value,
                     "patient_id": patient.value,
-                    "staff_ids": [doctor.value],
+                    "staff_ids": [doctor.value]
+                    + [i for i in extra_staff["ids"] if i != doctor.value],
                 }
 
                 await on_save_callback(reservation, reservation_id)
@@ -368,6 +393,7 @@ async def reservation_modal(
                             title="Delete Reservation?",
                             description="Confirm you want to delete this reservation from the agenda.",
                             on_save_callback=handle_delete,
+                            single_use=True
                         ).open()
                     ],
                 )
@@ -385,14 +411,15 @@ async def reservation_modal(
                         title="Save Reservation?",
                         description="Confirm you want to save this reservation to the agenda.",
                         on_save_callback=handle_save,
+                        single_use=True
                     ).open()
                 ],
             )
 
-    return dialog
+    delete_on_close(dialog)
 
 
-def confirmation_modal(title: str, description: str, on_save_callback):
+def confirmation_modal(title: str, description: str, on_save_callback, single_use: bool = False):
     """Generates a customizable confirmation modal popup."""
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-md p-6"):
         ui.label(title).classes(Style.h1())
@@ -418,8 +445,10 @@ def confirmation_modal(title: str, description: str, on_save_callback):
                             error_msg = e.response.json().get("detail", error_msg)
                         except Exception:
                             error_msg = e.response.text or error_msg
-                
-                ui.notify(f"Action failed: {error_msg}", type="negative", icon="warning")
+
+                ui.notify(
+                    f"Action failed: {error_msg}", type="negative", icon="warning"
+                )
             finally:
                 dialog.close()
 
@@ -427,4 +456,4 @@ def confirmation_modal(title: str, description: str, on_save_callback):
             ui.button("Cancel", on_click=handle_cancel).props("outline")
             ui.button("Confirm", on_click=handle_confirm)
 
-    return dialog
+    return delete_on_close(dialog) if single_use else dialog
