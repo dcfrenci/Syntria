@@ -25,7 +25,7 @@ jobs:
   integration:
     runs-on: ubuntu-24.04
     env:
-      ADMIN_EMAIL: ci-admin@example.test
+      ADMIN_EMAIL: ci-admin@example.com
       COMPOSE_FILE: docker-compose.yaml:docker-compose.test.yaml
       COMPOSE_PROFILES: ""
       API_BASE_URL: http://127.0.0.1:18081/api/v1
