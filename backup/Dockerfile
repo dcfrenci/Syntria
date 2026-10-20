@@ -4,4 +4,6 @@ FROM ${POSTGRES_IMAGE}
 RUN apk add --no-cache rclone age
 COPY backup.sh entrypoint.sh /usr/local/bin/
 RUN chmod 755 /usr/local/bin/backup.sh /usr/local/bin/entrypoint.sh
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
