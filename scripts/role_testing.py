@@ -495,7 +495,7 @@ def test_scoped_access(token: str, role_name: str, me: int | None):
 
 def main():
     print("Starting Permissions Test Script...\n")
-    
+
     global ADMIN_TOKEN
 
     require_demo_password()
@@ -516,14 +516,18 @@ def main():
                 continue
 
             token = response.json().get("access_token")
-            if user["role"] == "Admin":   # Admin is first in TEST_USERS
+            if user["role"] == "Admin":  # Admin is first in TEST_USERS
                 ADMIN_TOKEN = token
                 PERSON_BY_EMAIL.update(
-                    {u["person"]["email"]: u["person"]["id"]
-                     for u in _get("/users/?limit=100", token).json()["users"]}
+                    {
+                        u["person"]["email"]: u["person"]["id"]
+                        for u in _get("/users/?limit=100", token).json()["users"]
+                    }
                 )
             out = test_all_endpoints(token, user["role"])
-            sc = test_scoped_access(token, user["role"], PERSON_BY_EMAIL.get(user["email"]))
+            sc = test_scoped_access(
+                token, user["role"], PERSON_BY_EMAIL.get(user["email"])
+            )
             c, w = out[0] + sc[0], out[1] + sc[1]
             out = [c, w, 100.0 * c / (c + w) if c + w else 0.0]
             score.append(out)

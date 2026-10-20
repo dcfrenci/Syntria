@@ -102,13 +102,15 @@ def reset_database(token: str):
     print("\nCleaning up Persons...")
     persons = fetch_all("persons", token, "persons")
     for p in persons:
-        if p["email"] != ADMIN_EMAIL: 
+        if p["email"] != ADMIN_EMAIL:
             delete_item("persons", p["id"], token)
 
 
 if __name__ == "__main__":
     if "--yes" not in sys.argv:
-        print(f"This DELETES quotes, reservations, items, categories, presets, users and persons on {BASE_URL}.")
+        print(
+            f"This DELETES quotes, reservations, items, categories, presets, users and persons on {BASE_URL}."
+        )
         if input("Type 'reset' to continue: ").strip() != "reset":
             sys.exit("Aborted.")
     token = auth()

@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 from common import DEMO_PASSWORD
 
+
 def get_reminders():
     return [{"name": "Sms"}, {"name": "WhatsApp"}, {"name": "Telegram"}]
 
@@ -99,7 +100,7 @@ def get_categories():
             "name": "Geriatric Dentistry",
             "description": "Specialized dental care tailored for elderly patients",
             "is_active": False,
-        }
+        },
     ]
 
 
@@ -1308,61 +1309,72 @@ def get_items(c_map: dict):
 
 def get_reservations(p_map: dict):
     # Set the base reference to midnight UTC of the current day
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+    today = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
     # Calculate the Monday of the current week (0 = Monday)
     start_of_week = today - timedelta(days=today.weekday())
-    
+
     def week_date(days_offset, hour, minute, second=0, ms=0):
         """Generates an ISO 8601 formatted string relative to Monday of the current week."""
-        dt = start_of_week + timedelta(days=days_offset, hours=hour, minutes=minute, seconds=second, milliseconds=ms)
-        return dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+        dt = start_of_week + timedelta(
+            days=days_offset,
+            hours=hour,
+            minutes=minute,
+            seconds=second,
+            milliseconds=ms,
+        )
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
     reservations = []
-    
+
     # Identify available staff members
     marco = p_map.get("Marco Bianchi")
     sofia = p_map.get("Sofia Ricci")
     giulia = p_map.get("Giulia Rossi")
-    
+
     day_offset = 0  # Start on Monday
     hour = 9
     minute = 0
-    
+
     # Create exactly one appointment for every person in the system
     for i, (person_name, person_id) in enumerate(p_map.items()):
         # Alternate the primary doctor
         staff = [marco] if i % 2 == 0 else [sofia]
-        
+
         # Assign the assistant to every 3rd appointment
         if i % 3 == 0:
             staff.append(giulia)
-            
-        reservations.append({
-            "reservation_date": week_date(day_offset, hour, minute),
-            "duration_minutes": 45 if i % 2 == 0 else 60,
-            "description": f"Appointment for {person_name}",
-            "patient_id": person_id,
-            "staff_ids": staff,
-        })
-        
+
+        reservations.append(
+            {
+                "reservation_date": week_date(day_offset, hour, minute),
+                "duration_minutes": 45 if i % 2 == 0 else 60,
+                "description": f"Appointment for {person_name}",
+                "patient_id": person_id,
+                "staff_ids": staff,
+            }
+        )
+
         # Increment time by 45 minutes for the next slot
         minute += 45
         if minute >= 60:
             hour += 1
             minute -= 60
-            
+
         # Move to the next day if we pass 17:00 (5:00 PM)
         if hour >= 17:
             hour = 9
             minute = 0
             day_offset += 1
-            
+
             # Wrap around to Monday if we exceed Friday (day offset 4)
             if day_offset > 4:
                 day_offset = 0
 
     return reservations
+
 
 def get_quotes(p_map: dict, i_map: dict):
     return [

@@ -1,6 +1,7 @@
 import asyncio
-from nicegui import ui
 from datetime import datetime
+
+from nicegui import ui
 
 from components.images import image_src
 
@@ -132,7 +133,6 @@ class QuotePreviewModal:
     ):
         scaled_w = A4_WIDTH * scale
         scaled_h = A4_HEIGHT * scale
-        
 
         shadow_style = (
             "box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);" if scale < 1.0 else ""

@@ -1,7 +1,9 @@
 # components/teeth_selection.py
-from PIL import Image
-from nicegui import ui
 from functools import lru_cache
+from PIL import Image
+
+from nicegui import ui
+
 
 @lru_cache(maxsize=None)
 def _img_size(path: str) -> tuple[int, int]:
@@ -70,10 +72,21 @@ def teeth_selection(on_save_callback):
 
         def refresh_svg_layers():
             if primary_switch.value:
-                img_primary.set_content(generate_teeth_svg(PRIMARY_TEETH, PRIMARY_IMG, PRIMARY_BASE_W, PRIMARY_BASE_H))
+                img_primary.set_content(
+                    generate_teeth_svg(
+                        PRIMARY_TEETH, PRIMARY_IMG, PRIMARY_BASE_W, PRIMARY_BASE_H
+                    )
+                )
             else:
-                img_permanent.set_content(generate_teeth_svg(PERMANENT_TEETH, PERMANENT_IMG, PERMANENT_BASE_W, PERMANENT_BASE_H))
-                
+                img_permanent.set_content(
+                    generate_teeth_svg(
+                        PERMANENT_TEETH,
+                        PERMANENT_IMG,
+                        PERMANENT_BASE_W,
+                        PERMANENT_BASE_H,
+                    )
+                )
+
         primary_switch = ui.switch("Show Primary Dentition", value=False)
 
         PERMANENT_IMG = "app/assets/images/permanent_stylized.jpeg"

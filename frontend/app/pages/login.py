@@ -4,6 +4,7 @@ import time
 from collections import defaultdict, deque
 
 from nicegui import app, ui
+
 from api_client.auth import authenticate
 
 # Per-IP limiter (module-level ON PURPOSE: it must be shared by all sessions).
@@ -15,7 +16,9 @@ def _client_ip() -> str:
     try:
         req = ui.context.client.request
         # nginx sets X-Real-IP from the trusted real_ip chain; X-Forwarded-For's first hop is client-controlled.
-        return req.headers.get("x-real-ip") or (req.client.host if req.client else "unknown")
+        return req.headers.get("x-real-ip") or (
+            req.client.host if req.client else "unknown"
+        )
     except Exception:
         return "unknown"
 
@@ -50,7 +53,10 @@ def login_page():
         async def try_login():
             ip = _client_ip()
             if _ip_blocked(ip):
-                ui.notify("Too many failed attempts. Try again in a few minutes.", color="negative")
+                ui.notify(
+                    "Too many failed attempts. Try again in a few minutes.",
+                    color="negative",
+                )
                 return
 
             result = await authenticate(username_input.value, password_input.value, ip)

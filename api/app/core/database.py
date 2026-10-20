@@ -1,10 +1,12 @@
 from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+
 from app.core.config import settings
 
 # Create async engine with connection pooling
@@ -25,9 +27,11 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
+
 # Base class for all ORM models
 class Base(DeclarativeBase):
     pass
+
 
 # FastAPI Dependency for injecting database sessions into endpoints
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

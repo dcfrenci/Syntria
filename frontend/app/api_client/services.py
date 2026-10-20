@@ -1,5 +1,7 @@
 import httpx
+
 from api_client.base import APIClient
+
 
 class ServicesClient:
     @staticmethod
@@ -16,44 +18,44 @@ class ServicesClient:
                     params["is_active"] = is_active
 
                 result = await APIClient.get("/items/", params=params)
-                
+
                 if not result:
                     break
-                    
+
                 batch = result.get("items", [])
                 if not batch:
                     break
-                    
+
                 all_items.extend(batch)
-                
+
                 total = result.get("total", 0)
                 skip += limit
-                
+
                 if skip >= total:
                     break
-                    
+
             return all_items
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
                 return []
             raise
-    
+
     @staticmethod
     async def create_item(data: dict):
         """Creates a new service item."""
         return await APIClient.post("/items/", data=data)
-    
+
     @staticmethod
     async def get_item_with_id(item_id: int):
         """Fetch the item with a specific id."""
         result = await APIClient.get(f"/items/{item_id}")
         return result if result else []
-    
+
     @staticmethod
     async def update_item(item_id: int, data: dict):
         """Update the item with a specific id."""
         return await APIClient.patch(f"/items/{item_id}", data=data)
-    
+
     @staticmethod
     async def delete_item(item_id: int):
         """Delete the item with a specific id."""
@@ -73,42 +75,42 @@ class ServicesClient:
                     params["is_active"] = is_active
 
                 result = await APIClient.get("/categories/", params=params)
-                
+
                 if not result:
                     break
-                    
+
                 batch = result.get("categories", [])
                 if not batch:
                     break
-                    
+
                 all_categories.extend(batch)
-                
+
                 total = result.get("total", 0)
                 skip += limit
-                
+
                 if skip >= total:
                     break
-                    
+
             return all_categories
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 403:
                 return []
             raise
-    
+
     @staticmethod
     async def create_category(data: dict):
         """Creates a new category item."""
         return await APIClient.post("/categories/", data=data)
-    
+
     @staticmethod
     async def get_category_with_id(category_id: int):
         result = await APIClient.get(f"/categories/{category_id}")
         return result if result else []
-    
+
     @staticmethod
     async def update_category(category_id: int, data: dict):
         return await APIClient.patch(f"/categories/{category_id}", data=data)
-    
+
     @staticmethod
     async def delete_category(category_id: int):
         return await APIClient.delete(f"/categories/{category_id}")

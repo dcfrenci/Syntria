@@ -1,6 +1,6 @@
 from decimal import Decimal
-
 import pytest
+
 from fastapi import HTTPException
 from pydantic import ValidationError
 
@@ -37,7 +37,9 @@ def test_quote_total_is_recomputed_not_trusted():
         {
             "status": "Draft",
             "total_amount": "999999",
-            "items": [{"item_id": 1, "quantity": 2, "unit_price": "10.00", "discount": "5"}],
+            "items": [
+                {"item_id": 1, "quantity": 2, "unit_price": "10.00", "discount": "5"}
+            ],
         },
     )
     assert row["total_amount"] == Decimal("15.00")
@@ -52,7 +54,8 @@ def test_item_import_rejects_bad_price(price):
 
 def test_item_import_coerces_csv_booleans():
     row = _clean_row(
-        "items", {"name": "Valid", "price": "80.0", "is_active": "False", "is_specific": "True"}
+        "items",
+        {"name": "Valid", "price": "80.0", "is_active": "False", "is_specific": "True"},
     )
     assert row["is_active"] is False and row["is_specific"] is True
 
@@ -61,7 +64,10 @@ def test_reservation_import_requires_staff():
     base = {"reservation_date": "2026-10-02T10:00:00Z", "duration_minutes": "30"}
     with pytest.raises(HTTPException):
         _clean_row("reservations", {**base, "staff": []})
-    assert _clean_row("reservations", {**base, "staff": [{"id": 1}]})["duration_minutes"] == 30
+    assert (
+        _clean_row("reservations", {**base, "staff": [{"id": 1}]})["duration_minutes"]
+        == 30
+    )
 
 
 @pytest.mark.parametrize(

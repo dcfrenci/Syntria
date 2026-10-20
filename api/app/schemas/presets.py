@@ -1,6 +1,7 @@
 import re
 from datetime import datetime
 from enum import Enum
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 MAX_ELEMENTS = 100

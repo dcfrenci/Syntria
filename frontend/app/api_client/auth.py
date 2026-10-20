@@ -13,7 +13,9 @@ async def authenticate(username: str, password: str, client_ip: str | None = Non
     headers = {"X-Real-IP": client_ip} if client_ip and client_ip != "unknown" else {}
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
-            response = await client.post(f"{BASE_URL}/auth/token", data=data, headers=headers)
+            response = await client.post(
+                f"{BASE_URL}/auth/token", data=data, headers=headers
+            )
         except httpx.HTTPError:
             return {"error": "unavailable"}
     if response.status_code == 200:

@@ -8,26 +8,27 @@ def create_sidebar(active_route: str = "/"):
     ):
 
         with ui.row().classes("w-full items-center flex-nowrap py-6 gap-3 px-4"):
-            # Note: I wrapped the icon in a button so it can actually be clicked to close/open the sidebar, 
+            # Note: I wrapped the icon in a button so it can actually be clicked to close/open the sidebar,
             # which is standard UI behavior, but you can change it back to just ui.icon if you prefer!
             ui.button(icon="r_menu").props("flat round dense").classes("text-black")
             ui.image("app/assets/images/syntria_name.svg").classes("h-8 w-32")
-            
+
         ui.separator().classes("gap-0")
 
         def menu_item(icon: str, text: str, route: str):
             is_active = route == active_route
             base_classes = "menu-btn w-full justify-start py-3 px-4 rounded-xl text-lg text-black bg-transparent shadow-none"
-            
+
             if is_active:
                 base_classes += " menu-btn-active"
 
-            with ui.button(on_click=lambda: ui.navigate.to(route)).classes(base_classes).props("flat align=left"):
+            with ui.button(on_click=lambda: ui.navigate.to(route)).classes(
+                base_classes
+            ).props("flat align=left"):
                 # The gap-4 here matches the gap-4 in the header row above!
                 with ui.row().classes("items-center gap-4"):
                     ui.icon(icon, size="sm")
                     ui.label(text)
-
 
         # 2. MENU ITEMS CONTAINER
         # Added px-2 to the column just so the hover backgrounds of the buttons don't touch the absolute edge of the screen

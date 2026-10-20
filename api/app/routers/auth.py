@@ -62,7 +62,7 @@ def _record_failure(key: str) -> None:
     if len(_fails) >= MAX_TRACKED:
         for k in list(_fails):
             _prune(k, now)
-        while len(_fails) >= MAX_TRACKED:   # evict oldest only
+        while len(_fails) >= MAX_TRACKED:  # evict oldest only
             _fails.pop(next(iter(_fails)))
     _fails[key].append(now)
 
@@ -86,7 +86,11 @@ async def get_current_user(
     except (jwt.PyJWTError, TypeError, ValueError):
         raise credentials_exception
 
-    query = select(User).where(User.id == user_id).options(joinedload(User.person), joinedload(User.role))
+    query = (
+        select(User)
+        .where(User.id == user_id)
+        .options(joinedload(User.person), joinedload(User.role))
+    )
     user = (await db.execute(query)).scalar_one_or_none()
 
     if user is None:
@@ -95,7 +99,9 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
-    if user.updated_at is not None and payload.get("iat", 0) < int(user.updated_at.timestamp()):
+    if user.updated_at is not None and payload.get("iat", 0) < int(
+        user.updated_at.timestamp()
+    ):
         raise credentials_exception
 
     request.state.user_id = user.id
@@ -109,7 +115,10 @@ async def login_for_access_token(
     db: AsyncSession = Depends(get_db),
 ):
     email_key = form_data.username.strip().lower()[:255]
-    ip = (request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown"))[:64]
+    ip = (
+        request.headers.get("x-real-ip")
+        or (request.client.host if request.client else "unknown")
+    )[:64]
     email_hash = hashlib.sha256(email_key.encode()).hexdigest()[:12]
     pair_key = f"{ip}|{email_key}"
     try:

@@ -1,4 +1,5 @@
 from nicegui import ui
+
 from components.style import Style
 from components.export_modal import ExportModal
 from components.import_modal import ImportModal

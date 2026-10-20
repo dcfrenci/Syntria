@@ -32,7 +32,9 @@ class PersonModal:
             person = await PersonsClient.get_person(self.person_id)
             if person:
                 self.person_data = {k: person.get(k) for k in self.person_data.keys()}
-                self.original_person_data = self.person_data.copy() # Snapshot original state
+                self.original_person_data = (
+                    self.person_data.copy()
+                )  # Snapshot original state
 
         # Fetch reminder preferences for the dropdown
         try:
@@ -99,7 +101,7 @@ class PersonModal:
                     "flat text-color=gray-600"
                 )
                 ui.button("Save", on_click=self.save).props("unelevated color=primary")
-                
+
         delete_on_close(self.dialog)
 
     async def save(self):
@@ -172,7 +174,6 @@ class UserModal:
                 self.user_data["is_active"] = user.get("is_active", True)
                 self.original_user_data = self.user_data.copy()
                 cache[user["person"]["id"]] = user["person"]
-                
 
         with ui.dialog() as self.dialog, ui.card().classes(
             "w-full max-w-lg p-6 rounded-xl"
@@ -180,12 +181,16 @@ class UserModal:
             ui.label(self.title).classes("text-2xl font-bold mb-4 text-gray-800")
 
             with ui.column().classes("w-full gap-4"):
-                picker = PersonPicker("Person (Staff) *", cache, self.user_data["person_id"])
-                self.person_input = picker.select.bind_value(self.user_data, "person_id")
+                picker = PersonPicker(
+                    "Person (Staff) *", cache, self.user_data["person_id"]
+                )
+                self.person_input = picker.select.bind_value(
+                    self.user_data, "person_id"
+                )
                 if self.user_id:
                     picker.select.props("disable")
                     picker.search.set_visibility(False)
-                
+
                 self.role_input = (
                     ui.select(options=roles_options, label="Role *")
                     .bind_value(self.user_data, "role_id")
@@ -204,10 +209,12 @@ class UserModal:
                     .classes("w-full")
                     .props("outlined")
                 )
-                
+
                 # New confirm password input
                 self.password_confirm_input = (
-                    ui.input("Confirm Password", password=True, password_toggle_button=True)
+                    ui.input(
+                        "Confirm Password", password=True, password_toggle_button=True
+                    )
                     .bind_value(self, "password_confirm")
                     .classes("w-full")
                     .props("outlined")
@@ -224,7 +231,7 @@ class UserModal:
                     "flat text-color=gray-600"
                 )
                 ui.button("Save", on_click=self.save).props("unelevated color=primary")
-            
+
         delete_on_close(self.dialog)
 
     async def save(self):
@@ -236,9 +243,12 @@ class UserModal:
             return
         pw = self.user_data["password"]
         if pw and not (12 <= len(pw) and len(pw.encode("utf-8")) <= 72):
-            ui.notify("Password must be at least 12 characters (max 72 bytes).", type="warning")
+            ui.notify(
+                "Password must be at least 12 characters (max 72 bytes).",
+                type="warning",
+            )
             return
-            
+
         # Match validation check
         if self.user_data["password"] != self.password_confirm:
             ui.notify("Passwords do not match.", type="negative")
@@ -250,7 +260,7 @@ class UserModal:
             for key, value in self.user_data.items():
                 if value != self.original_user_data.get(key):
                     payload[key] = value
-            
+
             # Handle password separately since it starts empty
             if self.user_data["password"]:
                 payload["password"] = self.user_data["password"]

@@ -9,7 +9,6 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.exc import StaleDataError
 
-
 from app.core.config import settings
 from app.core.database import engine
 from app.logging_conf import setup_logging

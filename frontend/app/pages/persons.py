@@ -1,6 +1,8 @@
 import httpx
 from datetime import datetime
+
 from nicegui import ui, app
+
 from api_client.persons import PersonsClient
 from api_client.users import UsersClient
 from api_client.roles import RolesClient
@@ -25,7 +27,7 @@ def handle_api_error(e: Exception, action: str):
                 detail = e.response.json().get("detail", "Unknown error")
             except Exception:
                 detail = e.response.text or f"HTTP {e.response.status_code}"
-            
+
             ui.notify(f"Failed to {action}: {detail}", type="warning")
     else:
         ui.notify(f"System error while trying to {action}: {e}", type="negative")
@@ -34,7 +36,7 @@ def handle_api_error(e: Exception, action: str):
 async def persons_page():
     """Renders the comprehensive Directory, Users, Roles, and Reminders view."""
 
-    user_role = app.storage.user.get('role', '').lower()
+    user_role = app.storage.user.get("role", "").lower()
 
     with ui.column().classes("w-full gap-10"):
         ui.label("System Manager & Access").classes(Style.title())

@@ -175,7 +175,6 @@ async def get_active_preset(
     query = select(Preset).where(Preset.is_active == True)
 
     preset = (await db.execute(query)).scalar_one_or_none()
-    
 
     if not preset:
         raise HTTPException(

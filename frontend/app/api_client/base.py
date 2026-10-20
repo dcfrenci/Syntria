@@ -29,7 +29,11 @@ app.on_shutdown(_close_client)
 
 
 def _headers() -> dict:
-    token = app.storage.user["token"] if app.storage.user.get("authenticated", False) else None
+    token = (
+        app.storage.user["token"]
+        if app.storage.user.get("authenticated", False)
+        else None
+    )
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
@@ -37,23 +41,36 @@ class APIClient:
     """Centralized HTTP client for communicating with the FastAPI backend."""
 
     @staticmethod
-    async def _request(method: str, endpoint: str, *, params=None, json=None, files=None,
-                       timeout=httpx.USE_CLIENT_DEFAULT):
+    async def _request(
+        method,
+        endpoint,
+        *,
+        params=None,
+        json=None,
+        files=None,
+        timeout=httpx.USE_CLIENT_DEFAULT,
+        raise_for_status=True,
+    ):
         try:
             response = await _http().request(
-                method, f"{BASE_URL}{endpoint}", headers=_headers(),
-                params=params, json=json, files=files, timeout=timeout,
+                method,
+                f"{BASE_URL}{endpoint}",
+                headers=_headers(),
+                params=params,
+                json=json,
+                files=files,
+                timeout=timeout,
             )
-            return response
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 401 and app.storage.user.get("authenticated"):
-                app.storage.user["authenticated"] = False
-                app.storage.user["token"] = None
-                ui.navigate.to("/login")
-            raise
-        except httpx.HTTPError as e:
+        except httpx.HTTPError as e:  # transport errors only
             log.error("%s %s failed: %s", method, endpoint, e)
             raise
+        if response.status_code == 401 and app.storage.user.get("authenticated"):
+            app.storage.user["authenticated"] = False
+            app.storage.user["token"] = None
+            ui.navigate.to("/login")
+        if raise_for_status:
+            response.raise_for_status()  # outside the try on purpose
+        return response
 
     @staticmethod
     async def get(endpoint: str, params: dict | None = None) -> dict | list | None:
@@ -61,7 +78,9 @@ class APIClient:
         return res.json() if res is not None else None
 
     @staticmethod
-    async def post(endpoint: str, data: dict, timeout=httpx.USE_CLIENT_DEFAULT) -> dict | None:
+    async def post(
+        endpoint: str, data: dict, timeout=httpx.USE_CLIENT_DEFAULT
+    ) -> dict | None:
         res = await APIClient._request("POST", endpoint, json=data, timeout=timeout)
         return res.json() if res is not None else None
 

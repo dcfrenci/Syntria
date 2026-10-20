@@ -1,5 +1,6 @@
 from api_client.base import APIClient
 
+
 class QuotesClient:
     @staticmethod
     async def get_quotes():
@@ -7,7 +8,9 @@ class QuotesClient:
         all_quotes = []
         skip, limit = 0, 100
         while True:
-            result = await APIClient.get("/quotes/", params={"skip": skip, "limit": limit})
+            result = await APIClient.get(
+                "/quotes/", params={"skip": skip, "limit": limit}
+            )
             if not result:
                 break
             batch = result.get("quotes", [])
@@ -18,7 +21,7 @@ class QuotesClient:
             if skip >= result.get("total", 0):
                 break
         return all_quotes
-    
+
     @staticmethod
     async def get_quote_with_id(id: int):
         """Fetches the quote with a specific id."""
@@ -29,12 +32,12 @@ class QuotesClient:
     async def create_quote(data: dict):
         """Creates a customized quotation."""
         return await APIClient.post("/quotes/", data=data)
-    
+
     @staticmethod
     async def update_quote(quote_id: int, data: dict):
         """Update the quote with a specific id."""
         return await APIClient.patch(f"/quotes/{quote_id}", data=data)
-    
+
     @staticmethod
     async def delete_quote(quote_id: int):
         """Delete the quote with a specific id."""

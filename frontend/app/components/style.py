@@ -1,5 +1,3 @@
-
-
 class Style:
     # Page
 

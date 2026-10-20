@@ -10,7 +10,6 @@ from app.routers.auth import RoleChecker
 
 router = APIRouter(prefix="/items", tags=["Items"])
 
-
 allow_read = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
 )
@@ -162,9 +161,11 @@ async def delete_item(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Item with id {item_id} not found.",
         )
-        
+
     used = (
-        await db.execute(select(QuoteItem.id).where(QuoteItem.item_id == item_id).limit(1))
+        await db.execute(
+            select(QuoteItem.id).where(QuoteItem.item_id == item_id).limit(1)
+        )
     ).first()
     if used:
         raise HTTPException(

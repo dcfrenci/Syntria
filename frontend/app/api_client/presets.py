@@ -1,13 +1,14 @@
 from api_client.base import APIClient
 
+
 class PresetsClient:
-    
+
     @staticmethod
     async def get_presets():
         """Fetches all presets."""
         result = await APIClient.get("/presets/")
         return result.get("presets", []) if result else []
-    
+
     @staticmethod
     async def get_active_preset():
         """Fetche active preset."""
@@ -27,11 +28,13 @@ class PresetsClient:
     async def update_preset(preset_id: int, data: dict):
         """Updates the preset with a specific id."""
         return await APIClient.patch(f"/presets/{preset_id}", data=data)
-    
+
     @staticmethod
     async def upload_image(content: bytes, filename: str) -> str:
         """Returns the element content reference, e.g. 'image:12'."""
-        res = await APIClient.post_file("/presets/images", files={"file": (filename, content)})
+        res = await APIClient.post_file(
+            "/presets/images", files={"file": (filename, content)}
+        )
         return res["content"]
 
     @staticmethod

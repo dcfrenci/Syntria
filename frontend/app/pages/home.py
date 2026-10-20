@@ -2,6 +2,7 @@ from datetime import datetime
 import logging
 
 from nicegui import app, ui
+
 from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient

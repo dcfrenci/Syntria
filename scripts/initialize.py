@@ -20,13 +20,13 @@ def post_data(endpoint: str, data: list, token: str):
     url = f"{BASE_URL}/{endpoint}"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
     ids = []
-    
+
     for item in data:
         response = requests.post(url, json=item, headers=headers)
-        
+
         # Cleanly extract a label for printing
-        name_label = item.get('name', item.get('first_name', item.get('email', 'Item')))
-        
+        name_label = item.get("name", item.get("first_name", item.get("email", "Item")))
+
         if response.status_code in [200, 201]:
             print(f"Successfully created in {endpoint}: {name_label}")
             if "id" in response.json():
@@ -34,8 +34,10 @@ def post_data(endpoint: str, data: list, token: str):
         elif response.status_code == 409:
             print(f"Already exists in {endpoint}: {name_label}")
         else:
-            print(f"Failed to create in {endpoint}. Status: {response.status_code}, Error: {response.text}")
-            
+            print(
+                f"Failed to create in {endpoint}. Status: {response.status_code}, Error: {response.text}"
+            )
+
     return ids
 
 
@@ -51,14 +53,16 @@ def auth():
         print("----------------------------\n")
         return token
     else:
-        print(f"Authentication failed. Status: {response.status_code}, Error: {response.text}")
+        print(
+            f"Authentication failed. Status: {response.status_code}, Error: {response.text}"
+        )
         return None
 
 
 def create_reminders(token: str):
     reminders = get_reminders()
     post_data("reminders/", reminders, token)
-    
+
     # Fetch from DB to guarantee we map IDs even if they already existed
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/reminders/", headers=headers).json()
@@ -82,14 +86,16 @@ def create_persons(token: str, rem_map: dict):
 
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/persons/?limit=100", headers=headers).json()
-    p_map = {f"{p['first_name']} {p['last_name']}": p["id"] for p in res.get("persons", [])}
+    p_map = {
+        f"{p['first_name']} {p['last_name']}": p["id"] for p in res.get("persons", [])
+    }
     return p_map
 
 
 def create_categories(token: str):
     categories = get_categories()
     post_data("categories/", categories, token)
-    
+
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/categories/?limit=100", headers=headers).json()
     return {c["name"]: c["id"] for c in res.get("categories", [])}
@@ -98,7 +104,7 @@ def create_categories(token: str):
 def create_items(token: str, c_map: dict):
     items = get_items(c_map)
     post_data("items/", items, token)
-    
+
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/items/?limit=100", headers=headers).json()
     return {i["name"]: i["id"] for i in res.get("items", [])}
@@ -132,7 +138,7 @@ if __name__ == "__main__":
         help="Pre-fill the database with person, users, services and categories.",
     )
     args = parser.parse_args()
-    
+
     if args.pre_filled:
         require_demo_password()
 
@@ -143,13 +149,13 @@ if __name__ == "__main__":
     if token:
         rem_map = create_reminders(token)
         roles_map = create_roles(token)
-            
+
         if args.pre_filled:
             p_map = create_persons(token, rem_map)
-                
+
             # The mapping above ensures the following functions won't throw KeyErrors
             users_ids = create_users(token, roles_map, p_map)
-                
+
             c_map = create_categories(token)
             i_map = create_items(token, c_map)
 

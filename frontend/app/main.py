@@ -3,8 +3,8 @@ import json
 import logging
 import os
 import time
-from contextlib import contextmanager
 import httpx
+from contextlib import contextmanager
 
 from fastapi import Request
 from fastapi.responses import RedirectResponse, Response
@@ -90,7 +90,7 @@ def frame(page_title: str, active_route: str):
     create_sidebar(active_route=active_route)
 
     async def check_session():
-        
+
         if is_token_expired(app.storage.user.get("token")):
             return _logout("Your session has expired. Please log in again.")
         try:
@@ -162,7 +162,10 @@ def settings_route():
 
 storage_secret = os.environ.get("NICEGUI_STORAGE_SECRET", "")
 if len(storage_secret) < 32:
-    raise SystemExit("NICEGUI_STORAGE_SECRET must be set (>= 32 chars). Run scripts/gen-env.sh.")
+    raise SystemExit(
+        "NICEGUI_STORAGE_SECRET must be set (>= 32 chars). Run scripts/gen-env.sh."
+    )
+
 
 @app.get("/preset-image/{image_id}")
 async def preset_image(image_id: int):
@@ -170,16 +173,21 @@ async def preset_image(image_id: int):
     if not app.storage.user.get("authenticated", False):
         return Response(status_code=401)
     try:
-        res = await _http().get(f"{BASE_URL}/presets/images/{image_id}", headers=_headers())
+        res = await _http().get(
+            f"{BASE_URL}/presets/images/{image_id}", headers=_headers()
+        )
     except httpx.HTTPError:
         return Response(status_code=502)
     if res.status_code != 200:
-        return Response(status_code=res.status_code if res.status_code in (401, 403, 404) else 502)
+        return Response(
+            status_code=res.status_code if res.status_code in (401, 403, 404) else 502
+        )
     return Response(
         res.content,
         media_type=res.headers.get("content-type", "application/octet-stream"),
         headers={"Cache-Control": "private, max-age=86400"},
     )
+
 
 ui.run(
     title="Syntria",

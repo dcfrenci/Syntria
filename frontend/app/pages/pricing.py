@@ -1,4 +1,5 @@
 from nicegui import app, ui
+
 from api_client.services import ServicesClient
 from components.modals import service_modal, category_modal, confirmation_modal
 from components.style import Style

@@ -1,5 +1,7 @@
-from nicegui import app, ui
 import datetime
+
+from nicegui import app, ui
+
 from api_client.agenda import AgendaClient
 from api_client.persons import PersonsClient
 from api_client.users import UsersClient
@@ -150,7 +152,7 @@ async def agenda_page():
             on_save_callback=save_reservation,
             on_delete_callback=delete_reservation,
             reservation_id=reservation_id,
-        ) 
+        )
         if modal:
             modal.open()
 

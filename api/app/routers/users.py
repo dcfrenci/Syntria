@@ -198,9 +198,7 @@ async def get_reservations(
                 detail="You can only view your own reservations.",
             )
         target = await db.get(Person, target_person_id)
-        if target is None or (
-            target.email == settings.ADMIN_EMAIL and role != "admin"
-        ):
+        if target is None or (target.email == settings.ADMIN_EMAIL and role != "admin"):
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Target person not found."
             )

@@ -1,7 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from app.schemas._common import reject_null_fields
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.schemas._common import reject_null_fields
 
 
 class CategoryBase(BaseModel):
@@ -22,7 +23,7 @@ class CategoryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=50)
     description: str | None = Field(default=None, max_length=255)
     is_active: bool | None = None
-    
+
     @model_validator(mode="after")
     def _nulls(self):
         return reject_null_fields(self, "name", "is_active")

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+
 class ReminderPreferenceBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=50, examples=["WhatsApp"])
 

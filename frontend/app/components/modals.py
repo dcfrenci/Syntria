@@ -96,7 +96,7 @@ async def service_modal(title: str, on_save_callback, item_id: int | None = None
                         title="Save Service?",
                         description="Confirm you want to save this service to your catalog.",
                         on_save_callback=handle_save,
-                        single_use=True
+                        single_use=True,
                     ).open()
                 ],
             )
@@ -157,7 +157,7 @@ async def category_modal(title: str, on_save_callback, category_id: int | None =
                         title="Save Category?",
                         description="Confirm you want to save this category to your catalog.",
                         on_save_callback=handle_save,
-                        single_use=True
+                        single_use=True,
                     ).open()
                 ],
             )
@@ -388,7 +388,7 @@ async def reservation_modal(
                             title="Delete Reservation?",
                             description="Confirm you want to delete this reservation from the agenda.",
                             on_save_callback=handle_delete,
-                            single_use=True
+                            single_use=True,
                         ).open()
                     ],
                 )
@@ -406,7 +406,7 @@ async def reservation_modal(
                         title="Save Reservation?",
                         description="Confirm you want to save this reservation to the agenda.",
                         on_save_callback=handle_save,
-                        single_use=True
+                        single_use=True,
                     ).open()
                 ],
             )
@@ -414,7 +414,9 @@ async def reservation_modal(
     return delete_on_close(dialog)
 
 
-def confirmation_modal(title: str, description: str, on_save_callback, single_use: bool = False):
+def confirmation_modal(
+    title: str, description: str, on_save_callback, single_use: bool = False
+):
     """Generates a customizable confirmation modal popup."""
     with ui.dialog() as dialog, ui.card().classes("w-full max-w-md p-6"):
         ui.label(title).classes(Style.h1())

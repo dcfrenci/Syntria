@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.persons import PersonResponse
@@ -12,10 +13,13 @@ QuoteStatus = Literal["Draft", "Pending", "Accepted", "Rejected"]
 class QuoteItemBase(BaseModel):
     item_id: int = Field(..., description="ID of the selected Item/Service")
     quantity: int = Field(default=1, gt=0, le=999)
-    discount: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=10, decimal_places=2)
+    discount: Decimal = Field(
+        default=Decimal("0.00"), ge=0, max_digits=10, decimal_places=2
+    )
     teeth: list[Annotated[int, Field(ge=11, le=85)]] | None = Field(
         default=None, max_length=52, description="List of teeth for this specific item"
     )
+
 
 class QuoteItemCreate(QuoteItemBase):
     pass
@@ -38,9 +42,7 @@ class QuoteCreate(QuoteBase):
     staff_id: int | None = Field(
         default=None, description="The dentist creating the quote"
     )
-    items: list[QuoteItemCreate] = Field(
-        ..., min_length=1, max_length=100
-    )
+    items: list[QuoteItemCreate] = Field(..., min_length=1, max_length=100)
 
 
 class QuoteUpdate(BaseModel):
@@ -48,7 +50,9 @@ class QuoteUpdate(BaseModel):
     valid_until: date | None = None
     patient_id: int | None = None
     staff_id: int | None = None
-    items: list[QuoteItemCreate] | None = Field(default=None, min_length=1, max_length=100)
+    items: list[QuoteItemCreate] | None = Field(
+        default=None, min_length=1, max_length=100
+    )
 
 
 class QuoteResponse(QuoteBase):
