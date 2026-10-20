@@ -8,7 +8,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install ruff pip-audit
+      - run: pip install ruff pip-audit bandit pytest -r api/requirements.lock
+      - run: ruff check --select E9,F63,F7,F82 api frontend scripts
+      - run: pip-audit -r api/requirements.lock
+      - run: pip-audit -r frontend/requirements.lock
+      - run: bandit -r api/app frontend/app -ll -q
+      - run: cd api && python -m pytest -q tests
+      - uses: aquasecurity/trivy-action@<pin to the SHA of the current release>
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - run: ruff check --select E9,F63,F7,F82 api frontend scripts
       - run: pip-audit -r api/requirements.lock
       - run: pip-audit -r frontend/requirements.lock
@@ -28,6 +40,7 @@ jobs:
           echo "DEMO_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
       - run: docker compose up -d --build --wait --wait-timeout 240 nginx
       - run: docker compose exec -T -e ADMIN_PASSWORD api python -m app.cli bootstrap
+      - run: docker compose exec -T api alembic check
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/initialize.py --pre-filled && python scripts/role_testing.py
       - if: failure()

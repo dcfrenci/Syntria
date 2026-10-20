@@ -27,6 +27,12 @@ class PresetsClient:
     async def update_preset(preset_id: int, data: dict):
         """Updates the preset with a specific id."""
         return await APIClient.patch(f"/presets/{preset_id}", data=data)
+    
+    @staticmethod
+    async def upload_image(content: bytes, filename: str) -> str:
+        """Returns the element content reference, e.g. 'image:12'."""
+        res = await APIClient.post_file("/presets/images", files={"file": (filename, content)})
+        return res["content"]
 
     @staticmethod
     async def delete_preset(preset_id: int):

@@ -1,4 +1,5 @@
 import os
+import time
 import sys
 import requests
 from common import (
@@ -333,7 +334,7 @@ def test_all_endpoints(token: str, role_name: str):
     ]
 
     for method, path, payload, files in endpoints:
-
+        time.sleep(0.05)
         real_path = (
             path.replace("/1", "/999999")
             if method in ("PATCH", "DELETE") and path.endswith("/1")
@@ -502,6 +503,7 @@ def main():
     score = []
     for user in TEST_USERS:
         print(f"\n--- Authenticating as {user['role']} ({user['email']}) ---")
+        time.sleep(2)
         login_data = {"username": user["email"], "password": user["password"]}
         response = requests.post(f"{BASE_URL}/auth/token", data=login_data)
 

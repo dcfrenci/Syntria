@@ -138,7 +138,8 @@ async def agenda_page():
             on_save_callback=save_reservation,
             on_delete_callback=delete_reservation,
         )
-        modal.open()
+        if modal:
+            modal.open()
 
     async def edit_reservation(reservation_id: int):
         modal = await reservation_modal(
@@ -149,13 +150,14 @@ async def agenda_page():
             on_save_callback=save_reservation,
             on_delete_callback=delete_reservation,
             reservation_id=reservation_id,
-        )
-        modal.open()
+        ) 
+        if modal:
+            modal.open()
 
     ui.label("Agenda").classes(Style.title())
 
     if user_role in ["admin", "manager", "secretary"]:
-        all_users = await UsersClient.get_users()
+        all_users = await UsersClient.get_users(role="doctor", is_active=True)
         doctors = {
             u["person"]["id"]: f"{u['person']['first_name']} {u['person']['last_name']}"
             for u in all_users

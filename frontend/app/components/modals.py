@@ -10,6 +10,7 @@ from api_client.services import ServicesClient
 from api_client.agenda import AgendaClient
 
 from components.calendar import Calendar
+from components.person_picker import PersonPicker
 
 
 def delete_on_close(dialog):
@@ -100,7 +101,7 @@ async def service_modal(title: str, on_save_callback, item_id: int | None = None
                 ],
             )
 
-    delete_on_close(dialog)
+    return delete_on_close(dialog)
 
 
 async def category_modal(title: str, on_save_callback, category_id: int | None = None):
@@ -145,8 +146,8 @@ async def category_modal(title: str, on_save_callback, category_id: int | None =
             ui.button(
                 "Cancel",
                 on_click=lambda: [
-                    dialog.close(),
                     ui.notify(message="The category was not saved", type="info"),
+                    dialog.close(),
                 ],
             ).props("outline")
             ui.button(
@@ -161,7 +162,7 @@ async def category_modal(title: str, on_save_callback, category_id: int | None =
                 ],
             )
 
-    delete_on_close(dialog)
+    return delete_on_close(dialog)
 
 
 async def reservation_modal(
@@ -207,9 +208,9 @@ async def reservation_modal(
         my_calendar.update_new_event(time=time.value, duration=duration.value)
 
     # Fetch data and filter doctors / active services
-    raw_persons = await PersonsClient.get_persons()
-    all_users = await UsersClient.get_users()
-    if len(all_users) == 0:
+    persons_cache: dict[int, dict] = {}
+    all_users = await UsersClient.get_users(role="doctor", is_active=True)
+    if not all_users:
         all_users = [await UsersClient.get_user_me()]
     raw_services = await ServicesClient.get_items(is_active=True)
 
@@ -232,13 +233,7 @@ async def reservation_modal(
                     on_change=reload,
                 ).classes(Style.p())
 
-                patient = ui.select(
-                    label="Patient",
-                    options={
-                        p["id"]: f"{p['first_name']} {p['last_name']}"
-                        for p in raw_persons
-                    },
-                ).classes(Style.p())
+                patient = PersonPicker("Patient", persons_cache)
 
                 # --- Custom DD/MM/YYYY Date Picker ---
                 init_date = res_state.get("date")
@@ -312,7 +307,7 @@ async def reservation_modal(
 
         if reservation_id:
             reservation = await AgendaClient.get_reservation_with_id(reservation_id)
-            patient.value = reservation["patient"]["id"]
+            patient.set_person(reservation["patient"])
 
             staff_ids = [s["id"] for s in reservation.get("staff", [])]
             doctor_ids = [i for i in staff_ids if i in doctors]
@@ -400,8 +395,8 @@ async def reservation_modal(
             ui.button(
                 "Cancel",
                 on_click=lambda: [
-                    dialog.close(),
                     ui.notify(message="The reservation was not saved", type="info"),
+                    dialog.close(),
                 ],
             ).props("outline")
             ui.button(
@@ -416,7 +411,7 @@ async def reservation_modal(
                 ],
             )
 
-    delete_on_close(dialog)
+    return delete_on_close(dialog)
 
 
 def confirmation_modal(title: str, description: str, on_save_callback, single_use: bool = False):
@@ -430,7 +425,8 @@ def confirmation_modal(title: str, description: str, on_save_callback, single_us
             try:
                 await on_save_callback(False)
             finally:
-                dialog.close()
+                if not dialog.is_deleted:
+                    dialog.close()
 
         async def handle_confirm():
             try:

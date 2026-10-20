@@ -21,6 +21,10 @@ if [ -z "${ADMIN_EMAIL:-}" ] || [ "$ADMIN_EMAIL" = "admin@your-clinic.it" ]; the
   echo "Edit ADMIN_EMAIL in .env first, then re-run." >&2
   exit 1
 fi
+if [[ "${COMPOSE_PROFILES:-}" == *tailscale* && "${NICEGUI_HTTPS_ONLY:-false}" != "true" ]]; then
+  echo "Production profile requires NICEGUI_HTTPS_ONLY=true in .env." >&2
+  exit 1
+fi
 
 # ---------- 2. preflight ----------
 if ! ls api/migrations/versions/*.py >/dev/null 2>&1; then

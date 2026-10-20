@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.models import Person, User, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.services.scheduling import find_conflict, lock_schedule
@@ -37,7 +38,6 @@ async def create_reservation(
             detail="Self-only access permitted. Must be assigned as staff.",
         )
         
-    await lock_schedule(db)
 
 
     # 2. Verify patient exists
@@ -63,12 +63,20 @@ async def create_reservation(
             detail="One or more staff IDs are invalid.",
         )
 
+    await lock_schedule(db)
+    
     msg = await find_conflict(
         db, payload.reservation_date, payload.duration_minutes,
         payload.patient_id, payload.staff_ids,
     )
     if msg:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
+    
+    if role != "admin" and (
+        patient.email == settings.ADMIN_EMAIL
+        or any(s.email == settings.ADMIN_EMAIL for s in staff_members)
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
 
     # 5. Create Reservation
     reservation = Reservation(
@@ -107,6 +115,12 @@ async def get_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
+        
+    if role != "admin" and (
+        reservation.patient.email == settings.ADMIN_EMAIL
+        or any(s.email == settings.ADMIN_EMAIL for s in reservation.staff)
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Reservation not found.")
 
     if role in ["doctor", "assistant"] and current_user.person_id not in [
         s.id for s in reservation.staff
@@ -230,6 +244,10 @@ async def get_reservations(
         count_query = count_query.where(
             Reservation.patient_id == current_user.person_id
         )
+        
+    if role != "admin":
+        hide = ~Reservation.patient.has(Person.email == settings.ADMIN_EMAIL)
+        query, count_query = query.where(hide), count_query.where(hide)
 
     total = (await db.execute(count_query)).scalar_one()
     reservations = (await db.execute(query.offset(skip).limit(limit))).scalars().all()

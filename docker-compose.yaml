@@ -149,6 +149,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      frontend:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO /dev/null http://127.0.0.1:80/nginx-health || exit 1"]
       interval: 20s
@@ -209,7 +211,7 @@ services:
     profiles: ["tailscale"]
     logging: *logging
     environment:
-      TS_AUTHKEY: file:/run/secrets/ts_authkey
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_STATE_DIR: /var/lib/tailscale
       TS_SERVE_CONFIG: /config/serve.json
     volumes:

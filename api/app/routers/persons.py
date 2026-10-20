@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.models import User, Person, ReminderPreference
+from app.models import User, Person, ReminderPreference, Quote, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.persons import (
     PersonCreate,
@@ -63,22 +63,24 @@ async def get_persons(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     search: str | None = Query(
-        default=None, description="Search by name, email, or phone"
+        default=None, description="Search by name, email, or phone", max_length=100
     ),
     current_user: User = Depends(allow_read),
 ):
     filters = []
 
     if search:
-        search_pattern = f"%{search}%"
-        filters.append(
-            or_(
-                Person.first_name.ilike(search_pattern),
-                Person.last_name.ilike(search_pattern),
-                Person.email.ilike(search_pattern),
-                Person.phone_number.ilike(search_pattern),
+        for token in search.split()[:5]:
+            esc = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pat = f"%{esc}%"
+            filters.append(
+                or_(
+                    Person.first_name.ilike(pat, escape="\\"),
+                    Person.last_name.ilike(pat, escape="\\"),
+                    Person.email.ilike(pat, escape="\\"),
+                    Person.phone_number.ilike(pat, escape="\\"),
+                )
             )
-        )
 
     if current_user.role.name.lower() != "admin":
         filters.append(Person.email != settings.ADMIN_EMAIL)
@@ -116,6 +118,31 @@ async def get_person(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )
+    if role in ("doctor", "assistant") and person_id != current_user.person_id:
+        related = (
+            await db.execute(
+                select(Reservation.id)
+                .where(
+                    Reservation.patient_id == person_id,
+                    Reservation.staff.any(id=current_user.person_id),
+                )
+                .limit(1)
+            )
+        ).first() or (
+            role == "doctor"
+            and (
+                await db.execute(
+                    select(Quote.id)
+                    .where(
+                        Quote.patient_id == person_id,
+                        Quote.staff_id == current_user.person_id,
+                    )
+                    .limit(1)
+                )
+            ).first()
+        )
+        if not related:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Person not found.")
 
     person = (
         await db.execute(

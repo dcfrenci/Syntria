@@ -32,8 +32,10 @@ fi
 chmod 600 "$FINAL"
 echo "[backup] wrote $FINAL"
 
-# local retention
-find "$DIR" -maxdepth 1 -name 'syntria-*' -mtime +"$KEEP_DAYS" -delete
+# local retention: delete only files older than KEEP_DAYS AND outside the newest 3
+ls -1t "$DIR"/syntria-* 2>/dev/null | tail -n +4 | while read -r f; do
+  [ -n "$(find "$f" -mtime +"$KEEP_DAYS")" ] && rm -f "$f"
+done
 
 # optional off-site copy (encrypted only)
 if [ -n "${RCLONE_REMOTE:-}" ]; then

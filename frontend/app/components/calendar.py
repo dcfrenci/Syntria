@@ -124,7 +124,7 @@ class Calendar:
                                 sty_label
                             )
                             ui.label(
-                                f"- Reminder: {res['patient']['reminder_preference']['name']}"
+                                f"- Reminder: {(res['patient'].get('reminder_preference') or {}).get('name', '-')}"
                             ).classes(sty_label)
                             ui.label(
                                 f"- Phone: {res['patient']['phone_number']}"
@@ -138,7 +138,7 @@ class Calendar:
     def render_new_event(self):
         if not self.new_event:
             return
-        
+
         start_row = int((self.new_event["hour"] - self.start_hour) * 2) + 1
         row_span = max(1, int(self.new_event["duration"] // 30))
 

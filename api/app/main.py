@@ -7,6 +7,8 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm.exc import StaleDataError
+
 
 from app.core.config import settings
 from app.core.database import engine
@@ -49,6 +51,14 @@ app = FastAPI(
 MAX_BODY = 12 * 1024 * 1024
 
 
+@app.exception_handler(StaleDataError)
+async def stale_handler(request: Request, exc: StaleDataError):
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"detail": "The record was modified concurrently. Reload and retry."},
+    )
+
+
 @app.middleware("http")
 async def limit_body(request: Request, call_next):
     cl = request.headers.get("content-length")
@@ -61,22 +71,34 @@ async def limit_body(request: Request, call_next):
 
 @app.middleware("http")
 async def request_log(request: Request, call_next):
-    rid = request.headers.get("x-request-id") or uuid.uuid4().hex
-    ip = request.headers.get("x-real-ip") or (request.client.host if request.client else "-")
+    rid = request.headers.get("x-request-id", "")
+    if not (8 <= len(rid) <= 64 and rid.replace("-", "").isalnum()):
+        rid = uuid.uuid4().hex
+    ip = request.headers.get("x-real-ip") or (
+        request.client.host if request.client else "-"
+    )
     t0 = time.perf_counter()
     try:
         response = await call_next(request)
     except Exception:
         log.error(
             "%s %s -> 500 %.0fms rid=%s ip=%s user=%s",
-            request.method, request.url.path, (time.perf_counter() - t0) * 1000,
-            rid, ip, getattr(request.state, "user_id", "-"),
+            request.method,
+            request.url.path,
+            (time.perf_counter() - t0) * 1000,
+            rid,
+            ip,
+            getattr(request.state, "user_id", "-"),
         )
         raise  # the Exception handler still builds the 500 response
     log.info(
         "%s %s -> %s %.0fms rid=%s ip=%s user=%s",
-        request.method, request.url.path, response.status_code,
-        (time.perf_counter() - t0) * 1000, rid, ip,
+        request.method,
+        request.url.path,
+        response.status_code,
+        (time.perf_counter() - t0) * 1000,
+        rid,
+        ip,
         getattr(request.state, "user_id", "-"),
     )
     response.headers["x-request-id"] = rid

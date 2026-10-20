@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
 
     # Identifier of the system admin account (the password is never stored in config)
     ADMIN_EMAIL: str
@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
-
+    
+    @field_validator("POSTGRES_PASSWORD")
+    @classmethod
+    def _strong_db_password(cls, v: str) -> str:
+        if len(v) < 16 or v.lower() in ("admin", "password", "postgres"):
+            raise ValueError("POSTGRES_PASSWORD must be >= 16 chars and not a default")
+        return v
+    
 
 settings = Settings()

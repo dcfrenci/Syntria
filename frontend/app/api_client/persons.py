@@ -30,6 +30,18 @@ class PersonsClient:
             raise
 
     @staticmethod
+    async def search_persons(query: str, limit: int = 20) -> list[dict]:
+        try:
+            result = await APIClient.get(
+                "/persons/", params={"search": query, "limit": limit}
+            )
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                return []
+            raise
+        return result.get("persons", []) if result else []
+
+    @staticmethod
     async def get_person(person_id: int):
         return await APIClient.get(f"/persons/{person_id}")
 

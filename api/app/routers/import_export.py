@@ -3,8 +3,11 @@ import io
 import json
 import logging
 import asyncio
+import base64
+import csv
 from decimal import Decimal, InvalidOperation
 from typing import Literal, get_args
+from collections import OrderedDict
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
@@ -16,8 +19,18 @@ from sqlalchemy.orm import selectinload
 from app.services.scheduling import find_conflict, lock_schedule
 from app.core.database import get_db
 from app.core.config import settings
-from app.models import Item, Person, Preset, Quote, QuoteItem, Reservation, User
+from app.models import (
+    Item,
+    Person,
+    Preset,
+    Quote,
+    QuoteItem,
+    Reservation,
+    User,
+    PresetImage,
+)
 from app.routers.auth import RoleChecker
+from app.routers.presets import check_image_refs
 from app.schemas.presets import ComponentSchema, MarginSchema
 from app.schemas.quotes import QuoteStatus
 
@@ -28,6 +41,24 @@ allow_admin_mgr = RoleChecker(["admin", "manager"])
 log = logging.getLogger("syntria.import_export")
 
 Entity = Literal["quotes", "items", "reservations", "presets"]
+
+
+async def _inline_images(db, elements):
+    out = []
+    for e in elements or []:
+        c = e.get("content") if isinstance(e, dict) else None
+        if isinstance(c, str) and c.startswith("image:") and c[6:].isdigit():
+            img = await db.get(PresetImage, int(c[6:]))
+            e = {
+                **e,
+                "content": (
+                    f"data:{img.content_type};base64,{base64.b64encode(img.data).decode()}"
+                    if img
+                    else None
+                ),
+            }
+        out.append(e)
+    return out
 
 
 class ExportPayload(BaseModel):
@@ -41,6 +72,7 @@ class CommitAction(BaseModel):
 
 class CommitPayload(BaseModel):
     actions: list[CommitAction] = Field(max_length=5000)
+    batch_id: str | None = Field(default=None, min_length=8, max_length=64)
 
 
 # --- CSV formula injection guard: cells starting with these are executed by Excel/LibreOffice ---
@@ -57,39 +89,27 @@ def _csv_unsafe(v):  # reverses _csv_safe on import so round-trips are lossless
     return v
 
 
-def _pd():
-    import pandas as pd
-
-    return pd
-
-
 def parse_date(val):
-    pd = _pd()
-    if not val or pd.isna(val):
+    if not val:
         return None
     if isinstance(val, str):
-        try:
-            return datetime.date.fromisoformat(val.split("T")[0])
-        except Exception:
-            pass
+        return datetime.date.fromisoformat(val.split("T")[0])
     return val
 
 
 def parse_datetime(val):
-    pd = _pd()
-    if not val or pd.isna(val):
+    if not val:
         return None
     if isinstance(val, str):
-        try:
-            return datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
-        except Exception:
-            pass
+        return datetime.datetime.fromisoformat(val.replace("Z", "+00:00"))
     return val
 
 
 def _clean_row(entity: str, data: dict) -> dict:
     """Re-validate untrusted commit data with the same rules as the normal API."""
     try:
+        if data.get("id") is not None:
+            data["id"] = int(data["id"])
         if entity == "items":
             price = Decimal(str(data.get("price")))
             if price <= 0 or price.as_tuple().exponent < -2:
@@ -103,6 +123,8 @@ def _clean_row(entity: str, data: dict) -> dict:
             ):
                 raise ValueError("description")
             data["price"] = price
+            data["is_active"] = _as_bool(data.get("is_active"), True)
+            data["is_specific"] = _as_bool(data.get("is_specific"), False)
 
         elif entity == "quotes":
             if data.get("status", "Draft") not in get_args(QuoteStatus):
@@ -114,27 +136,46 @@ def _clean_row(entity: str, data: dict) -> dict:
                 disc = Decimal(str(itm.get("discount", 0)))
                 if qty <= 0 or unit < 0 or disc < 0:
                     raise ValueError("item")
+                teeth = itm.get("teeth")
+                if qty > 999 or (
+                    teeth is not None
+                    and (
+                        not isinstance(teeth, list)
+                        or len(teeth) > 52
+                        or any(
+                            not isinstance(t, int) or not 11 <= t <= 85 for t in teeth
+                        )
+                    )
+                ):
+                    raise ValueError("item")
                 total += max(unit * qty - disc, Decimal("0.00"))
                 items.append(
                     {**itm, "quantity": qty, "unit_price": unit, "discount": disc}
                 )
             data["items"] = items
-            data["total_amount"] = total  # never trust the CSV's total
+            data["total_amount"] = total
+            data["valid_until"] = parse_date(data.get("valid_until"))
 
         elif entity == "reservations":
             start = parse_datetime(data.get("reservation_date"))
             if not isinstance(start, datetime.datetime) or start.tzinfo is None:
                 raise ValueError("date")
-            
-            if not 0 < int(data.get("duration_minutes", 30)) <= 1440:
+            data["duration_minutes"] = int(data.get("duration_minutes") or 30)
+            if not 0 < data["duration_minutes"] <= 1440:
                 raise ValueError("duration")
             if (
                 data.get("description") is not None
                 and len(str(data["description"])) > 500
             ):
                 raise ValueError("description")
+            staff = data.get("staff")
+            if not isinstance(staff, list) or not any(
+                isinstance(s, dict) and s.get("id") for s in staff
+            ):
+                raise ValueError("staff")
 
         elif entity == "presets":
+            data["is_active"] = _as_bool(data.get("is_active"), False)
             if not 1 <= len(str(data.get("name") or "")) <= 100:
                 raise ValueError("name")
             elements = data.get("elements") or []
@@ -169,12 +210,40 @@ _MODELS = {
 
 
 def _parse_csv(contents: bytes) -> list[dict]:
-    pd = _pd()
-    df = pd.read_csv(io.BytesIO(contents))
-    if len(df) > 5000:
-        raise ValueError("too many rows")
-    df = df.astype(object).where(pd.notnull(df), None).map(_csv_unsafe)
-    return df.to_dict(orient="records")
+    csv.field_size_limit(
+        8_000_000
+    )  # default 128 KB would reject presets with embedded images
+    reader = csv.DictReader(io.StringIO(contents.decode("utf-8-sig")))
+    rows: list[dict] = []
+    for raw in reader:
+        if len(rows) >= 5000:
+            raise ValueError("too many rows")
+        raw.pop(None, None)  # extra cells beyond the header
+        rows.append({k: _csv_unsafe(v if v != "" else None) for k, v in raw.items()})
+    return rows
+
+
+def _as_bool(v, default: bool) -> bool:
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return default
+    s = str(v).strip().lower()
+    if s in ("true", "1"):
+        return True
+    if s in ("false", "0"):
+        return False
+    raise ValueError("bool")
+
+
+def _to_csv(rows: list[dict]) -> str:
+    buf = io.StringIO()
+    if rows:
+        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: _csv_safe(v) for k, v in r.items()})
+    return buf.getvalue()
 
 
 def _as_int(v):
@@ -195,7 +264,9 @@ async def _visible_persons(db, ids, actor) -> set[int]:
     found = await _existing(db, Person, ids)
     if actor.role.name.lower() != "admin":
         admin_id = (
-            await db.execute(select(Person.id).where(Person.email == settings.ADMIN_EMAIL))
+            await db.execute(
+                select(Person.id).where(Person.email == settings.ADMIN_EMAIL)
+            )
         ).scalar_one_or_none()
         found.discard(admin_id)
     return found
@@ -221,8 +292,10 @@ async def export_data(
     current_user: User = Depends(allow_admin_mgr),
 ):
     """Exports structured relationships to a flat CSV by serializing entire nested objects as JSON."""
-    pd = _pd()
     ids = payload.ids
+
+    log.info("export entity=%s count=%d user=%s", entity, len(ids), current_user.id)
+
     if not ids:
         raise HTTPException(400, "No IDs provided for export")
 
@@ -353,7 +426,7 @@ async def export_data(
                     "id": r.id,
                     "name": r.name,
                     "is_active": r.is_active,
-                    "elements": json.dumps(r.elements),
+                    "elements": json.dumps(await _inline_images(db, r.elements)),
                     "margins": json.dumps(r.margins),
                 }
             )
@@ -361,11 +434,8 @@ async def export_data(
     else:
         raise HTTPException(400, f"Unsupported export entity: {entity}")
 
-    df = pd.DataFrame(data).map(_csv_safe)
-    csv_buffer = io.StringIO()
-    df.to_csv(csv_buffer, index=False)
     return Response(
-        content=csv_buffer.getvalue(),
+        content=_to_csv(data),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={entity}_export.csv"},
     )
@@ -446,8 +516,7 @@ async def validate_import(
     return results
 
 
-@router.post("/commit/{entity}")
-async def commit_import(
+async def _do_commit(
     entity: Entity,
     payload: CommitPayload,
     db: AsyncSession = Depends(get_db),
@@ -455,14 +524,14 @@ async def commit_import(
 ):
     """Executes bulk inserts and updates within a single transaction from serialized nested objects."""
     actions = payload.actions
-    
+
     person_ids, item_ids = set(), set()
     for act in actions:
         if act.selected_action in ("new", "update"):
             _collect_refs(act.data, person_ids, item_ids)
     ok_persons = await _visible_persons(db, person_ids, current_user)
     ok_items = await _existing(db, Item, item_ids)
-    
+
     if entity == "reservations":
         await lock_schedule(db)
 
@@ -477,17 +546,36 @@ async def commit_import(
             data.pop("id", None)  # Let the DB assign a fresh ID
 
         data = _clean_row(entity, data)
-        
+
+        if action == "update":
+            target_id = _as_int(data.get("id"))
+            if target_id is None or await db.get(_MODELS[entity], target_id) is None:
+                raise HTTPException(
+                    422, f"{entity} id {data.get('id')} not found. Nothing was saved."
+                )
+            if entity == "quotes" and current_user.role.name.lower() != "admin":
+                q = await db.get(Quote, target_id)
+                if q.patient and q.patient.email == settings.ADMIN_EMAIL:
+                    raise HTTPException(404, "Quote not found. Nothing was saved.")
+
         refs_p, refs_i = set(), set()
         _collect_refs(data, refs_p, refs_i)
         refs_p.discard(None)
         refs_i.discard(None)
-        if {_as_int(i) for i in refs_p} - ok_persons or {_as_int(i) for i in refs_i} - ok_items:
-            raise HTTPException(422, "Import references records that do not exist. Nothing was saved.")
+        if {_as_int(i) for i in refs_p} - ok_persons or {
+            _as_int(i) for i in refs_i
+        } - ok_items:
+            raise HTTPException(
+                422, "Import references records that do not exist. Nothing was saved."
+            )
 
         if entity == "reservations":
             p = data.get("patient")
-            staff_ids = [s["id"] for s in data.get("staff") or [] if isinstance(s, dict) and s.get("id")]
+            staff_ids = [
+                s["id"]
+                for s in data.get("staff") or []
+                if isinstance(s, dict) and s.get("id")
+            ]
             msg = await find_conflict(
                 db,
                 parse_datetime(data["reservation_date"]),
@@ -497,7 +585,9 @@ async def commit_import(
                 exclude_id=data.get("id") if action == "update" else None,
             )
             if msg:
-                raise HTTPException(409, f"Reservation conflict: {msg} Nothing was saved.")
+                raise HTTPException(
+                    409, f"Reservation conflict: {msg} Nothing was saved."
+                )
 
         try:
             if entity == "quotes":
@@ -595,6 +685,12 @@ async def commit_import(
                     db_obj.staff.extend(staff_members)
 
             elif entity == "presets":
+                await check_image_refs(db, data.get("elements"))
+                if data.get("is_active", False):
+                    q = update(Preset).values(is_active=False)
+                    if action == "update":
+                        q = q.where(Preset.id != data.get("id"))
+                    await db.execute(q)
                 db_obj = (
                     await db.get(Preset, data.get("id"))
                     if action == "update"
@@ -607,10 +703,6 @@ async def commit_import(
                 if action == "new":
                     db.add(db_obj)
                 await db.flush()
-                if db_obj.is_active:
-                    await db.execute(
-                        update(Preset).where(Preset.id != db_obj.id).values(is_active=False)
-                    )
 
         except Exception:
             await db.rollback()
@@ -621,3 +713,29 @@ async def commit_import(
 
     await db.commit()
     return {"message": f"Successfully processed {len(actions)} records."}
+
+
+# In-memory, like the login throttle: valid because the API runs a single worker.
+_batches: "OrderedDict[str, None]" = OrderedDict()
+
+
+@router.post("/commit/{entity}")
+async def commit_import(
+    entity: Entity,
+    payload: CommitPayload,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(allow_admin_mgr),
+):
+    key = f"{current_user.id}:{payload.batch_id}" if payload.batch_id else None
+    if key:
+        if key in _batches:
+            raise HTTPException(409, "This import batch was already submitted.")
+        _batches[key] = None
+        while len(_batches) > 200:
+            _batches.popitem(last=False)
+    try:
+        return await _do_commit(entity, payload, db, current_user)
+    except BaseException:
+        if key:
+            _batches.pop(key, None)  # failed and rolled back: allow a retry
+        raise

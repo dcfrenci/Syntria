@@ -11,6 +11,7 @@ from components.quote_preview_modal import QuotePreviewModal
 from components.teeth_selection import teeth_selection
 from components.modals import confirmation_modal
 from components.style import Style
+from components.person_picker import PersonPicker
 
 
 log = logging.getLogger("syntria.home")
@@ -187,6 +188,7 @@ async def quote_detail(
     person_selected: dict | None = None,
     staff_selected: dict | None = None,
     services_selected: dict | None = None,
+    seed_persons: list[dict] | None = None,
 ):
     date_selected = date_selected or {"date": None}
     person_selected = person_selected or {"patient_id": None}
@@ -197,16 +199,17 @@ async def quote_detail(
 
         ui.label(title).classes(Style.title())
 
-        persons = {p["id"]: p for p in await PersonsClient.get_persons()}
-        users = await UsersClient.get_users()
-        if len(users) == 0:
+        persons: dict[int, dict] = {p["id"]: p for p in (seed_persons or []) if p}
+        users = await UsersClient.get_users(role="doctor", is_active=True)
+        if not users:
             users = [await UsersClient.get_user_me()]
-        
-        doctor_person_ids = {
-            u["person"]["id"]
+        doctors = {
+            u["person"]["id"]: u["person"]
             for u in users
-            if u.get("role", {}).get("name", "").lower() == "doctor" and u.get("is_active", False)
+            if u.get("role", {}).get("name", "").lower() == "doctor"
+            and u.get("is_active", False)
         }
+        persons.update(doctors)
 
         # Doctor selection and detail
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
@@ -214,11 +217,10 @@ async def quote_detail(
             with ui.column():
                 ui.label("Select Doctor").classes(Style.h2())
                 with ui.card().classes("w-full"):
-                    names = {
-                        k: f"{v['first_name']} {v['last_name']}"
-                        for k, v in persons.items()
-                        if k in doctor_person_ids
-                    }
+                    names = {k: f"{v['first_name']} {v['last_name']}" for k, v in doctors.items()}
+                    sid = staff_selected["staff_id"]
+                    if sid in persons and sid not in names:  # editing a quote of an inactive doctor
+                        names[sid] = f"{persons[sid]['first_name']} {persons[sid]['last_name']}"
                     ui.select(options=names, with_input=True).bind_value(
                         staff_selected, "staff_id"
                     ).classes(Style.p())
@@ -257,13 +259,9 @@ async def quote_detail(
                 ui.label("Select Patient").classes(Style.h2())
 
                 with ui.card().classes("w-full"):
-                    names = {
-                        k: f"{v['first_name']} {v['last_name']}"
-                        for k, v in persons.items()
-                    }
-                    ui.select(options=names, with_input=True).bind_value(
-                        person_selected, "patient_id"
-                    ).classes(Style.p())
+                    PersonPicker(
+                        "Patient", persons, person_selected.get("patient_id")
+                    ).select.bind_value(person_selected, "patient_id")
 
                 with ui.card().classes("w-full"):
                     init_date = date_selected.get("date")
@@ -695,6 +693,7 @@ async def quote_edit(id: int):
             person_selected={"patient_id": quote["patient"]["id"]},
             staff_selected={"staff_id": (quote.get("staff") or {}).get("id")},
             services_selected=services_selected,
+            seed_persons=[quote["patient"], quote.get("staff")],
         )
     except Exception:
         log.exception("quote page failed")

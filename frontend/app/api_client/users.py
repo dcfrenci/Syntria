@@ -3,11 +3,16 @@ from api_client.base import APIClient
 
 class UsersClient:
     @staticmethod
-    async def get_users():
+    async def get_users(role: str | None = None, is_active: bool | None = None):
         try:
             all_users, skip, limit = [], 0, 100
             while True:
-                res = await APIClient.get("/users/", params={"skip": skip, "limit": limit})
+                params = {"skip": skip, "limit": limit}
+                if role:
+                    params["role"] = role
+                if is_active is not None:
+                    params["is_active"] = is_active
+                res = await APIClient.get("/users/", params=params)
                 if not res:
                     break
                 batch = res.get("users", [])

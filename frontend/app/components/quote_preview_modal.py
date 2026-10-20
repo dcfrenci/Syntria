@@ -2,6 +2,8 @@ import asyncio
 from nicegui import ui
 from datetime import datetime
 
+from components.images import image_src
+
 A4_WIDTH = 794
 A4_HEIGHT = 1123
 
@@ -194,7 +196,7 @@ class QuotePreviewModal:
                                     pos_x = el.get("image_pos_x", 50)
                                     pos_y = el.get("image_pos_y", 50)
                                     ui.element("img").props(
-                                        f'src="{el["content"]}" draggable="false"'
+                                        f'src="{image_src(el["content"])}" draggable="false"'
                                     ).classes(
                                         f"w-full h-full pointer-events-none object-{fit_style}"
                                     ).style(
@@ -359,9 +361,7 @@ class QuotePreviewModal:
             <body>
                 ${{el.innerHTML}}
                 <script>
-                    setTimeout(() => {{ 
-                        window.print(); 
-                    }}, 800);
+                    window.addEventListener('load', () => {{ setTimeout(() => window.print(), 300); }});
                 </script>
             </body>
             </html>`;

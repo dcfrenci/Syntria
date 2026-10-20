@@ -193,7 +193,7 @@ This seeds the 7 roles and the reminder preferences, then creates the admin `ADM
 
 ```bash
 docker compose up -d db
-docker compose run --rm --no-deps api alembic stamp head
+docker compose run --rm --no-deps api alembic stamp edeb179f2afe
 ```
 
 Rotate the old `admin/admin` DB credentials as described in `backup/backup_conf.md` ("Existing deployment").

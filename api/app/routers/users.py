@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import get_password_hash
 from app.models import Person, Reservation, Role, User
 from app.routers.auth import RoleChecker, get_current_user
@@ -134,6 +135,7 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
+    role: str | None = Query(default=None, max_length=50),
     role_id: int | None = Query(default=None),
     is_active: bool | None = Query(default=None),
     current_user: User = Depends(allow_admin_mgr_sec),
@@ -143,7 +145,9 @@ async def list_users(
         filters.append(User.role_id == role_id)
     if is_active is not None:
         filters.append(User.is_active == is_active)
-    if not _is_admin(current_user):  # <-- NEW: hide admin accounts from non-admins
+    if role:
+        filters.append(User.role.has(func.lower(Role.name) == role.lower()))
+    if not _is_admin(current_user):
         filters.append(User.role.has(func.lower(Role.name) != "admin"))
 
     query = select(User).options(selectinload(User.person), selectinload(User.role))
@@ -193,7 +197,10 @@ async def get_reservations(
                 status.HTTP_403_FORBIDDEN,
                 detail="You can only view your own reservations.",
             )
-        if await db.get(Person, target_person_id) is None:
+        target = await db.get(Person, target_person_id)
+        if target is None or (
+            target.email == settings.ADMIN_EMAIL and role != "admin"
+        ):
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Target person not found."
             )

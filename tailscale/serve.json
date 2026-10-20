@@ -1,7 +1,8 @@
 {
   "TCP": {
     "443": { "HTTPS": true },
-    "8443": { "HTTPS": true }
+    "8443": { "HTTPS": true },
+    "9443": { "HTTPS": true }
   },
   "Web": {
     "${TS_CERT_DOMAIN}:443": {
@@ -9,6 +10,9 @@
     },
     "${TS_CERT_DOMAIN}:8443": {
       "Handlers": { "/": { "Proxy": "http://nginx:81" } }
+    },
+    "${TS_CERT_DOMAIN}:9443": {
+      "Handlers": { "/": { "Proxy": "http://nginx:82" } }
     }
   },
   "AllowFunnel": {

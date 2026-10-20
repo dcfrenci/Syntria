@@ -1,5 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select, update
+import re
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import Response
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import defer
@@ -7,7 +11,7 @@ from sqlalchemy.orm import defer
 from app.core.database import get_db
 from app.models import User
 from app.routers.auth import RoleChecker
-from app.models.presets import Preset
+from app.models.presets import Preset, PresetImage
 from app.schemas.presets import (
     PresetCreate,
     PresetListResponse,
@@ -17,10 +21,72 @@ from app.schemas.presets import (
 
 router = APIRouter(prefix="/presets", tags=["Presets"])
 
-allow_read_active = RoleChecker(["admin", "manager", "secretary", "doctor", "employee", "client"])
+allow_read_active = RoleChecker(
+    ["admin", "manager", "secretary", "doctor", "employee", "client"]
+)
 allow_read = RoleChecker(["admin", "manager", "secretary", "doctor"])
 allow_write = RoleChecker(["admin", "manager", "secretary"])
 allow_delete = RoleChecker(["admin", "manager"])
+
+
+MAX_IMAGE_BYTES = 2 * 1024 * 1024
+_IMG_REF = re.compile(r"^image:(\d{1,10})$")
+
+
+def _sniff(data: bytes) -> str | None:
+    """Never trust the client's content-type; SVG is deliberately not accepted."""
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+async def check_image_refs(db, elements) -> None:
+    ids = set()
+    for e in elements or []:
+        m = (
+            _IMG_REF.match(str(e.get("content") or ""))
+            if e.get("type") == "image"
+            else None
+        )
+        if m:
+            ids.add(int(m.group(1)))
+    if not ids:
+        return
+    found = set(
+        (
+            await db.execute(select(PresetImage.id).where(PresetImage.id.in_(ids)))
+        ).scalars()
+    )
+    if ids - found:
+        raise HTTPException(
+            422, detail="Preset references an image that does not exist."
+        )
+
+
+async def gc_images(db) -> None:
+    """Drop images no preset references, once they are older than 24 h (abandoned uploads)."""
+    used = set()
+    for els in (await db.execute(select(Preset.elements))).scalars():
+        for e in els or []:
+            m = (
+                _IMG_REF.match(str(e.get("content") or ""))
+                if e.get("type") == "image"
+                else None
+            )
+            if m:
+                used.add(int(m.group(1)))
+    stmt = delete(PresetImage).where(
+        PresetImage.created_at < datetime.now(timezone.utc) - timedelta(hours=24)
+    )
+    if used:
+        stmt = stmt.where(PresetImage.id.notin_(used))
+    await db.execute(stmt)
 
 
 @router.post("/", response_model=PresetResponse, status_code=status.HTTP_201_CREATED)
@@ -33,11 +99,15 @@ async def create_preset(
     if payload.is_active:
         await db.execute(update(Preset).values(is_active=False))
 
-    preset = Preset(**payload.model_dump())
+    data = payload.model_dump()
+    await check_image_refs(db, data["elements"])
+    preset = Preset(**data)
+
     db.add(preset)
 
     await db.flush()
     await db.refresh(preset)
+    await gc_images(db)
     return preset
 
 
@@ -61,6 +131,42 @@ async def get_presets(
     return {"total": total, "presets": presets}
 
 
+@router.post("/images", status_code=status.HTTP_201_CREATED)
+async def upload_image(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db, scope="function"),
+    current_user: User = Depends(allow_write),
+):
+    data = await file.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(413, detail="Image too large (max 2 MB).")
+    ctype = _sniff(data)
+    if ctype is None:
+        raise HTTPException(
+            415, detail="Only PNG, JPEG, GIF or WebP images are accepted."
+        )
+    img = PresetImage(content_type=ctype, data=data)
+    db.add(img)
+    await db.flush()
+    return {"id": img.id, "content": f"image:{img.id}"}
+
+
+@router.get("/images/{image_id}")
+async def get_image(
+    image_id: int,
+    db: AsyncSession = Depends(get_db, scope="function"),
+    current_user: User = Depends(allow_read_active),
+):
+    img = await db.get(PresetImage, image_id)
+    if not img:
+        raise HTTPException(404, detail="Image not found.")
+    return Response(
+        content=img.data,
+        media_type=img.content_type,
+        headers={"Cache-Control": "private, max-age=86400"},  # ids are never reused
+    )
+
+
 @router.get("/active", response_model=PresetResponse, status_code=status.HTTP_200_OK)
 async def get_active_preset(
     db: AsyncSession = Depends(get_db, scope="function"),
@@ -68,19 +174,18 @@ async def get_active_preset(
 ):
     # Assuming your model has an 'is_active' boolean column
     query = select(Preset).where(Preset.is_active == True)
-    
+
     try:
         preset = (await db.execute(query)).scalar_one_or_none()
     except MultipleResultsFound:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Data integrity error: Multiple active presets found. Only one is allowed."
+            detail="Data integrity error: Multiple active presets found. Only one is allowed.",
         )
 
     if not preset:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active preset found."
+            status_code=status.HTTP_404_NOT_FOUND, detail="No active preset found."
         )
 
     return preset
@@ -119,6 +224,15 @@ async def update_preset(
 
     update_data = payload.model_dump(exclude_unset=True)
 
+    client_version = update_data.pop("version", None)
+    if client_version is not None and client_version != preset.version:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="This preset was modified by someone else. Reload it and reapply your changes.",
+        )
+    if "elements" in update_data:
+        await check_image_refs(db, update_data["elements"])
+
     # If updating this preset to active, deactivate all others
     if update_data.get("is_active") is True:
         await db.execute(
@@ -130,6 +244,7 @@ async def update_preset(
 
     await db.flush()
     await db.refresh(preset)
+    await gc_images(db)
     return preset
 
 
@@ -146,4 +261,6 @@ async def delete_preset(
         )
 
     await db.delete(preset)
+    await db.flush()
+    await gc_images(db)
     return None

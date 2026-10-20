@@ -1,5 +1,6 @@
 import os
 import requests
+import sys
 
 from common import BASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
 
@@ -107,6 +108,10 @@ def reset_database(token: str):
 
 
 if __name__ == "__main__":
+    if "--yes" not in sys.argv:
+        print(f"This DELETES quotes, reservations, items, categories, presets, users and persons on {BASE_URL}.")
+        if input("Type 'reset' to continue: ").strip() != "reset":
+            sys.exit("Aborted.")
     token = auth()
     if token:
         reset_database(token)

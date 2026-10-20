@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models import Item, Category, User
+from app.models import Item, Category, User, QuoteItem
 from app.schemas.items import ItemCreate, ItemListResponse, ItemResponse, ItemUpdate
 from app.routers.auth import RoleChecker
 
@@ -57,7 +57,7 @@ async def create_item(
 async def get_items(
     db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
-    limit: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=50, ge=1, le=100),
     category_id: int | None = Query(default=None, description="Filter by Category ID"),
     is_active: bool | None = Query(default=None),
     is_specific: bool | None = Query(default=None),
@@ -80,10 +80,8 @@ async def get_items(
         .where(*filters)
         .order_by(Item.id)
         .offset(skip)
+        .limit(limit)
     )
-
-    if limit is not None:
-        items_query = items_query.limit(limit)
 
     items = (await db.execute(items_query)).scalars().all()
 
@@ -163,6 +161,15 @@ async def delete_item(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Item with id {item_id} not found.",
+        )
+        
+    used = (
+        await db.execute(select(QuoteItem.id).where(QuoteItem.item_id == item_id).limit(1))
+    ).first()
+    if used:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="This service is used in existing quotes. Deactivate it instead.",
         )
 
     await db.delete(item)

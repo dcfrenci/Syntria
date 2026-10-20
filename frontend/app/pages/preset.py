@@ -1,11 +1,15 @@
 import uuid
-import base64
 import inspect
 from datetime import datetime
+import logging
+import httpx
+
 from nicegui import ui, events, app
+
 from components.style import Style
 from components.modals import confirmation_modal
 from components.quote_preview_modal import QuotePreviewModal
+from components.images import image_src
 from api_client.presets import PresetsClient
 
 # Standard Document Constraints
@@ -70,6 +74,7 @@ class QuoteBuilderState:
         self.preset_name = ""
         self.scale = 0.75
         self.margins = {"top": 96.0, "right": 96.0, "bottom": 96.0, "left": 96.0}
+        self.version = None
 
 
 def preset_page():
@@ -276,6 +281,7 @@ async def preset_edit(id: int):
         preset = await PresetsClient.get_preset(int(id))
         if preset:
             state.editing_preset_id = preset["id"]
+            state.version = preset.get("version")
             state.preset_name = preset.get("name", "Untitled Preset")
             state.elements = [e.copy() for e in preset.get("elements", [])]
             state.margins = preset.get(
@@ -379,6 +385,7 @@ def builder_ui(state: QuoteBuilderState):
 
         try:
             if state.editing_preset_id:
+                payload["version"] = state.version
                 await PresetsClient.update_preset(state.editing_preset_id, payload)
                 ui.notify("Preset updated successfully", type="positive")
             else:
@@ -386,6 +393,12 @@ def builder_ui(state: QuoteBuilderState):
                 await PresetsClient.create_preset(payload)
                 ui.notify("New preset created successfully", type="positive")
             ui.navigate.to("/preset")
+        except httpx.HTTPStatusError as e:
+            try:
+                detail = e.response.json().get("detail", str(e))
+            except Exception:
+                detail = str(e)
+            ui.notify(f"Failed to save preset: {detail}", type="negative")
         except Exception as e:
             ui.notify(f"Failed to save preset: {e}", type="negative")
 
@@ -441,9 +454,9 @@ def builder_ui(state: QuoteBuilderState):
                         target_el["h"] = new_h
                         render_properties_panel.refresh()
         except Exception:
-            pass
+            logging.getLogger("syntria.preset").debug("size sync failed", exc_info=True)
 
-    ui.timer(0.5, auto_sync_size)
+    ui.timer(1.0, auto_sync_size)
 
     # --- REFRESHABLE UI COMPONENTS ---
     @ui.refreshable
@@ -752,7 +765,7 @@ def builder_ui(state: QuoteBuilderState):
                                     pos_x = el.get("image_pos_x", 50)
                                     pos_y = el.get("image_pos_y", 50)
                                     ui.element("img").props(
-                                        f'src="{el["content"]}" draggable="false"'
+                                        f'src="{image_src(el["content"])}" draggable="false"'
                                     ).classes(
                                         f"w-full h-full pointer-events-none object-{fit_style}"
                                     ).style(
@@ -996,20 +1009,10 @@ def builder_ui(state: QuoteBuilderState):
                         else:
                             content = content_or_coro
 
-                        encoded = base64.b64encode(content).decode("utf-8")
+                        name = getattr(getattr(e, "file", e), "name", "image")
+                        ref = await PresetsClient.upload_image(content, name)
+                        update_element(el, "content", ref)
 
-                        ext = getattr(e, "name", "image.png").split(".")[-1].lower()
-                        mime_types = {
-                            "jpg": "image/jpeg",
-                            "jpeg": "image/jpeg",
-                            "png": "image/png",
-                            "gif": "image/gif",
-                            "webp": "image/webp",
-                        }
-                        mime_type = mime_types.get(ext, "image/png")
-
-                        data_uri = f"data:{mime_type};base64,{encoded}"
-                        update_element(el, "content", data_uri)
                     except Exception as ex:
                         ui.notify(f"Error processing image: {ex}", type="negative")
 

@@ -21,6 +21,10 @@ def _client_ip() -> str:
 
 
 def _ip_blocked(ip: str) -> bool:
+    if len(_ip_fails) > 5000:
+        cutoff = time.monotonic() - IP_WINDOW
+        for k in [k for k, v in _ip_fails.items() if not v or v[-1] < cutoff]:
+            _ip_fails.pop(k, None)
     q, now = _ip_fails[ip], time.monotonic()
     while q and now - q[0] > IP_WINDOW:
         q.popleft()

@@ -7,6 +7,7 @@ MAX_ELEMENTS = 100
 MAX_IMAGE_CHARS = 3_000_000  # ~2 MB binary after base64
 MAX_TEXT_CHARS = 5_000
 _IMG_RE = re.compile(r"^data:image/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$")
+_IMG_REF_RE = re.compile(r"^image:\d{1,10}$")
 MAX_TOTAL_IMAGE_CHARS = 6_000_000
 
 
@@ -53,6 +54,8 @@ class ComponentSchema(BaseModel):
 
     @model_validator(mode="after")
     def _validate_content(self):
+        if _IMG_REF_RE.match(self.content):
+            return self
         if self.content is None:
             return self
         if self.type == ComponentType.IMAGE:
@@ -87,6 +90,7 @@ class PresetUpdate(BaseModel):
         default=None, max_length=MAX_ELEMENTS
     )
     margins: MarginSchema | None = None
+    version: int | None = Field(default=None, ge=1)
     _total = field_validator("elements")(_check_total_images)
 
 
@@ -94,7 +98,7 @@ class PresetResponse(PresetBase):
     id: int
     created_at: datetime
     updated_at: datetime | None = None
-
+    version: int
     model_config = ConfigDict(from_attributes=True)
 
 

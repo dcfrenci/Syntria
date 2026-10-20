@@ -8,7 +8,7 @@ import hashlib
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -61,8 +61,8 @@ def _record_failure(key: str) -> None:
     if len(_fails) >= MAX_TRACKED:
         for k in list(_fails):
             _prune(k, now)
-        if len(_fails) >= MAX_TRACKED:
-            _fails.clear()
+        while len(_fails) >= MAX_TRACKED:   # evict oldest only
+            _fails.pop(next(iter(_fails)))
     _fails[key].append(now)
 
 
@@ -98,6 +98,8 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user"
         )
+    if user.updated_at is not None and payload.get("iat", 0) < int(user.updated_at.timestamp()):
+        raise credentials_exception
 
     request.state.user_id = user.id
     return user
@@ -123,7 +125,7 @@ async def login_for_access_token(
     query = (
         select(User)
         .join(User.person)
-        .where(Person.email == form_data.username)
+        .where(func.lower(Person.email) == email_key)
         .options(selectinload(User.person), selectinload(User.role))
     )
     user = (await db.execute(query)).scalar_one_or_none()

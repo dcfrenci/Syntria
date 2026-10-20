@@ -7,6 +7,7 @@ from api_client.reminders import RemindersClient
 from api_client.users import UsersClient
 from api_client.roles import RolesClient
 from components.modals import delete_on_close
+from components.person_picker import PersonPicker
 
 
 class PersonModal:
@@ -158,11 +159,7 @@ class UserModal:
 
     async def build(self):
         # Fetch data for dropdowns
-        raw_persons = await PersonsClient.get_persons()
-        persons_options = {
-            p["id"]: f"{p['first_name']} {p['last_name']} ({p['email']})"
-            for p in raw_persons
-        }
+        cache: dict[int, dict] = {}
 
         raw_roles = await RolesClient.get_roles()
         roles_options = {r["id"]: r["name"] for r in raw_roles}
@@ -173,7 +170,9 @@ class UserModal:
                 self.user_data["person_id"] = user.get("person", {}).get("id")
                 self.user_data["role_id"] = user.get("role", {}).get("id")
                 self.user_data["is_active"] = user.get("is_active", True)
-                self.original_user_data = self.user_data.copy() # Snapshot original state
+                self.original_user_data = self.user_data.copy()
+                cache[user["person"]["id"]] = user["person"]
+                
 
         with ui.dialog() as self.dialog, ui.card().classes(
             "w-full max-w-lg p-6 rounded-xl"
@@ -181,21 +180,12 @@ class UserModal:
             ui.label(self.title).classes("text-2xl font-bold mb-4 text-gray-800")
 
             with ui.column().classes("w-full gap-4"):
-                self.person_input = (
-                    ui.select(
-                        options=persons_options,
-                        label="Person (Staff) *",
-                        with_input=True,
-                    )
-                    .bind_value(self.user_data, "person_id")
-                    .classes("w-full")
-                    .props("outlined")
-                )
+                picker = PersonPicker("Person (Staff) *", cache, self.user_data["person_id"])
+                self.person_input = picker.select.bind_value(self.user_data, "person_id")
                 if self.user_id:
-                    self.person_input.props(
-                        "disable"
-                    )  # Prevent changing the linked person on update
-
+                    picker.select.props("disable")
+                    picker.search.set_visibility(False)
+                
                 self.role_input = (
                     ui.select(options=roles_options, label="Role *")
                     .bind_value(self.user_data, "role_id")

@@ -20,4 +20,4 @@ USER appuser
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${FASTAPI_PORT} --proxy-headers --no-server-header"]
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${FASTAPI_PORT} --workers 1 --proxy-headers --no-server-header"]

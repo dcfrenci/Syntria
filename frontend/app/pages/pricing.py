@@ -202,7 +202,15 @@ async def pricing_page():
             with ui.row().classes(Style.row_end()):
                 ui.button("New", icon="r_add", on_click=new_service)
                 ui.button("Edit", icon="r_edit", on_click=edit_service)
-                ui.button("Delete", icon="r_delete", on_click=delete_service_diag.open)
+                ui.button(
+                    "Delete",
+                    icon="r_delete",
+                    on_click=lambda: (
+                        delete_service_diag.open()
+                        if check_selected(table_items, "service")
+                        else None
+                    ),
+                )
 
         ui.label("Categories").classes(Style.h2())
 
