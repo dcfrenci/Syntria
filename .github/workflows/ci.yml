@@ -14,7 +14,7 @@ jobs:
       - run: pip-audit -r frontend/requirements.lock
       - run: bandit -r api/app frontend/app -ll -q
       - run: cd api && python -m pytest -q tests
-      - uses: aquasecurity/trivy-action@<pin to the SHA of the current release>
+      - uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
