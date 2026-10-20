@@ -1,4 +1,3 @@
-import os
 import argparse
 import requests
 from seed_data import (
@@ -84,7 +83,6 @@ def create_persons(token: str, rem_map: dict):
     headers = {"Authorization": f"Bearer {token}"}
     res = requests.get(f"{BASE_URL}/persons/?limit=100", headers=headers).json()
     p_map = {f"{p['first_name']} {p['last_name']}": p["id"] for p in res.get("persons", [])}
-    p_map["Elisa Copolla"] = p_map.get("Elisa Coppola")
     return p_map
 
 

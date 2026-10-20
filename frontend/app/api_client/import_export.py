@@ -3,8 +3,6 @@ import httpx
 from nicegui import app, ui
 from api_client.base import APIClient
 
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
-
 
 def _detail(res: httpx.Response) -> str:
     try:
@@ -16,12 +14,6 @@ def _detail(res: httpx.Response) -> str:
 
 class DataClient(APIClient):
     """Manages communication with the backend Import/Export endpoints."""
-
-    @staticmethod
-    def _get_headers():
-        """Helper to get auth headers for the httpx endpoints."""
-        token = app.storage.user.get("token")
-        return {"Authorization": f"Bearer {token}"} if token else {}
 
     @classmethod
     async def fetch_all(cls, entity: str):
@@ -63,10 +55,11 @@ class DataClient(APIClient):
         # Using httpx directly because APIClient expects JSON responses, not raw CSV files
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
-                res = await client.post(
-                    f"{BASE_URL}/import_export/export/{entity}",
+                res = await cls._request(
+                    "POST",
+                    f"/import_export/export/{entity}",
                     json={"ids": ids},
-                    headers=cls._get_headers(),
+                    timeout=60.0,
                 )
             except httpx.HTTPError:
                 ui.notify("Server did not respond in time.", type="negative")
@@ -88,10 +81,11 @@ class DataClient(APIClient):
         async with httpx.AsyncClient(timeout=60.0) as client:
             files = {"file": ("upload.csv", file_bytes, "text/csv")}
             try:
-                res = await client.post(
-                    f"{BASE_URL}/import_export/validate/{entity}",
-                    files=files,
-                    headers=cls._get_headers(),
+                res = await cls._request(
+                    "POST",
+                    f"/import_export/validate/{entity}",
+                    files={"file": ("upload.csv", file_bytes, "text/csv")},
+                    timeout=60.0,
                 )
             except httpx.HTTPError:
                 ui.notify("Server did not respond in time.", type="negative")

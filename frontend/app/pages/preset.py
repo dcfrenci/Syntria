@@ -456,7 +456,6 @@ def builder_ui(state: QuoteBuilderState):
         except Exception:
             logging.getLogger("syntria.preset").debug("size sync failed", exc_info=True)
 
-    ui.timer(1.0, auto_sync_size)
 
     # --- REFRESHABLE UI COMPONENTS ---
     @ui.refreshable
@@ -531,6 +530,7 @@ def builder_ui(state: QuoteBuilderState):
                 )
 
                 canvas.on("dragover.prevent", lambda: None)
+                canvas.on("mouseup", auto_sync_size)
 
                 def handle_drop(e):
                     if getattr(state, "dragged_element_id", None):

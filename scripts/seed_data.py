@@ -76,7 +76,7 @@ def get_categories():
         },
         # NOT active
         {
-            "name": "Cosmetic Dentistry",
+            "name": "Cosmetic",
             "description": "Teeth whitening, veneers, and smile makeovers",
             "is_active": False,
         },

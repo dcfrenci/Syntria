@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from fastapi.responses import Response
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import defer
 
 from app.core.database import get_db
@@ -175,13 +174,8 @@ async def get_active_preset(
     # Assuming your model has an 'is_active' boolean column
     query = select(Preset).where(Preset.is_active == True)
 
-    try:
-        preset = (await db.execute(query)).scalar_one_or_none()
-    except MultipleResultsFound:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Data integrity error: Multiple active presets found. Only one is allowed.",
-        )
+    preset = (await db.execute(query)).scalar_one_or_none()
+    
 
     if not preset:
         raise HTTPException(

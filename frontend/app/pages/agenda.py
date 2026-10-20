@@ -177,7 +177,7 @@ async def agenda_page():
 
     if user_role in ["doctor"]:
         user = await UsersClient.get_user_me()
-        await my_agenda.set_doctor(doctor_id=user["person"]["id"])
+        my_agenda.doctor_id = user["person"]["id"]
 
     with ui.column().classes("w-full"):
         my_agenda.date_navigator()

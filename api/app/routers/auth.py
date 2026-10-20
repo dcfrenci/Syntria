@@ -4,13 +4,14 @@ from collections import defaultdict, deque
 from typing import Annotated, List
 import asyncio
 import hashlib
-
 import jwt
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
+
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -85,11 +86,7 @@ async def get_current_user(
     except (jwt.PyJWTError, TypeError, ValueError):
         raise credentials_exception
 
-    query = (
-        select(User)
-        .where(User.id == user_id)
-        .options(selectinload(User.person), selectinload(User.role))
-    )
+    query = select(User).where(User.id == user_id).options(joinedload(User.person), joinedload(User.role))
     user = (await db.execute(query)).scalar_one_or_none()
 
     if user is None:

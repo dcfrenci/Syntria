@@ -6,6 +6,9 @@ from components.images import image_src
 
 A4_WIDTH = 794
 A4_HEIGHT = 1123
+HEADER_HEIGHT = 40
+ROW_HEIGHT = 45
+FOOTER_HEIGHT = 50
 
 
 class QuotePreviewModal:
@@ -46,13 +49,6 @@ class QuotePreviewModal:
 
         items = quote.get("quote_items", [])
         total_amount = quote.get("total_amount", "0.00")
-
-        safe_name = patient_name.replace(" ", "_")
-        filename = f"Quote_{safe_name}_{date_str.replace('/', '-')}.pdf"
-
-        HEADER_HEIGHT = 40
-        ROW_HEIGHT = 45
-        FOOTER_HEIGHT = 50
 
         quote_el = next((e for e in elements if e["type"] == "quote"), None)
         pages_data = []
@@ -122,7 +118,6 @@ class QuotePreviewModal:
             date_str,
             total_amount,
             quote_el,
-            filename,
         )
 
     def _render_pages(
@@ -137,9 +132,7 @@ class QuotePreviewModal:
     ):
         scaled_w = A4_WIDTH * scale
         scaled_h = A4_HEIGHT * scale
-        HEADER_HEIGHT = 40
-        ROW_HEIGHT = 45
-        FOOTER_HEIGHT = 50
+        
 
         shadow_style = (
             "box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);" if scale < 1.0 else ""
@@ -288,7 +281,6 @@ class QuotePreviewModal:
             date_str,
             total_amount,
             quote_el,
-            filename,
         ) = self._prepare_data(preset, quote)
 
         container_id = (
@@ -387,7 +379,6 @@ class QuotePreviewModal:
             date_str,
             total_amount,
             quote_el,
-            filename,
         ) = self._prepare_data(preset, quote)
 
         with self.dialog, ui.card().classes(
