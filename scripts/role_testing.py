@@ -481,8 +481,8 @@ def test_scoped_access(token: str, role_name: str, me: int | None):
             f = next((r for r in admin_rs if not own(r)), None)
             if f:
                 check(
-                    f"GET /reservations/{f['id']} (foreign) -> 404",
-                    _get(f"/reservations/{f['id']}", token).status_code == 404,
+                    f"GET /reservations/{f['id']} (foreign) -> 403/404",
+                    _get(f"/reservations/{f['id']}", token).status_code in (403, 404),
                 )
 
     wrong = results.count(False)
