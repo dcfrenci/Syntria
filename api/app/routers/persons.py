@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -244,7 +245,7 @@ async def update_person(
 @router.delete("/{person_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_person(
     person_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_delete),
 ):
     person = await db.get(Person, person_id)
@@ -252,15 +253,19 @@ async def delete_person(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, detail=f"Person with ID {person_id} not found."
         )
-
     _hide_admin(person, current_user)
-    if (
-        person.email == settings.ADMIN_EMAIL
-    ):  # even an admin: this would cascade-delete the admin user
+    if person.email == settings.ADMIN_EMAIL:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="The system admin person cannot be deleted.",
         )
-
+    
     await db.delete(person)
+    try:
+        await db.flush()
+    except IntegrityError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="Cannot delete person with linked quotes or reservations. Anonymise or reassign records first.",
+        )
     return None

@@ -124,7 +124,6 @@ Then set the remaining values by hand:
 chmod 600 .env
 sed -i 's|^ADMIN_EMAIL=.*|ADMIN_EMAIL=owner@yourclinic.it|' .env
 sed -i 's|^COMPOSE_PROFILES=.*|COMPOSE_PROFILES=tailscale|' .env     # production: tailscale, NOT tools
-sed -i 's|^# COMPOSE_FILE=|COMPOSE_FILE=|' .env                       # never load docker-compose.override.yaml (dev bind-mounts + --reload)
 nano .env                                                             # TS_AUTHKEY, AGE_RECIPIENT, RCLONE_REMOTE, HEALTHCHECK_URL
 ```
 

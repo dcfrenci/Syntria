@@ -108,6 +108,7 @@ EXPECTED_ALLOWED = {
         "Doctor",
         "Assistant",
         "Employee",
+        "Client",
     ],
     ("GET", "/users/1"): ["Admin", "Manager", "Secretary"],
     ("PATCH", "/users/1"): ["Admin", "Manager"],

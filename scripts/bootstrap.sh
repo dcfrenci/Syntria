@@ -100,6 +100,16 @@ if [ "$MODE" != skip ]; then
 fi
 
 # ---------- 4. real stack ----------
+set -euo pipefail
+
+# Verify Compose configuration does not contain dev overrides
+if docker compose config | grep -qE -- '--reload|ENABLE_DOCS: "?true'; then
+  echo "ERROR: Development override flag (--reload or ENABLE_DOCS) is active!" >&2
+  echo "Ensure COMPOSE_FILE in .env is set strictly to 'docker-compose.yaml'." >&2
+  exit 1
+fi
+
+echo "Compose configuration verified safe for production."
 echo "== Starting the real stack =="
 docker compose up -d --build --wait --wait-timeout 240 api   # waits for db + api healthy
 docker compose up -d                                         # everything else (no wait: backup is slow to report healthy)

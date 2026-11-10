@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from app.core.security import get_password_hash, verify_password
 from app.routers import auth
 from app.routers.import_export import _clean_row, _csv_safe, _csv_unsafe, _parse_csv
-from app.schemas.presets import ComponentSchema
+from app.schemas.presets import ComponentSchema, ComponentType
 from app.schemas.quotes import QuoteItemCreate
 
 
@@ -103,3 +103,15 @@ def test_login_throttle_locks_after_max_fails():
     with pytest.raises(HTTPException) as e:
         auth._check_throttle("k")
     assert e.value.status_code == 429
+
+def test_preset_component_schema_null_content_handling():
+    component = ComponentSchema(
+        id="comp-1",
+        type=ComponentType.IMAGE,
+        x=0.0,
+        y=0.0,
+        w=100.0,
+        h=100.0,
+        content=None,
+    )
+    assert component.content is None

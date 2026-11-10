@@ -55,12 +55,11 @@ class ComponentSchema(BaseModel):
 
     @model_validator(mode="after")
     def _validate_content(self):
-        if _IMG_REF_RE.match(self.content):
-            return self
         if self.content is None:
             return self
+        if _IMG_REF_RE.match(self.content):
+            return self
         if self.type == ComponentType.IMAGE:
-            # Only base64 raster images: no quotes/URLs/SVG can break out of the <img src="..."> attribute
             if len(self.content) > MAX_IMAGE_CHARS or not _IMG_RE.match(self.content):
                 raise ValueError(
                     "Image content must be a PNG/JPEG/GIF/WebP base64 data URI under ~2 MB."

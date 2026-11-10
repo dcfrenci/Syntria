@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime
+from decimal import Decimal
 
 from nicegui import ui
 
@@ -230,17 +231,30 @@ class QuotePreviewModal:
                                     i_data = item.get("item", {})
                                     name = i_data.get("name", "Unknown Service")
                                     qty = item.get("quantity", 1)
-                                    price = i_data.get("price", "0.00")
-                                    if len(str(price)) > 15:
-                                        price = str(price)[:12] + "..."
-
+                                    
                                     is_spec = i_data.get("is_specific", False)
                                     teeth_arr = item.get("teeth", [])
                                     teeth_str = (
                                         ", ".join(map(str, teeth_arr))
                                         if is_spec and teeth_arr
-                                        else ""
+                                        else "-"
                                     )
+
+                                    # 1. Prioritize snapshotted unit_price
+                                    raw_price = item.get("unit_price")
+                                    if raw_price is None:
+                                        raw_price = i_data.get("price", "0.00")
+                                        
+                                    unit_price = Decimal(str(raw_price))
+                                    discount = Decimal(str(item.get("discount", "0.00")))
+                                    
+                                    line_subtotal = unit_price * qty
+                                    line_net_total = max(line_subtotal - discount, Decimal("0.00"))
+
+                                    # 2. Format snapshotted price string with currency symbol
+                                    price_str = f"€{unit_price:.2f}"
+                                    if len(price_str) > 15:
+                                        price_str = price_str[:12] + "..."
 
                                     with ui.row().classes(
                                         "w-full text-gray-800 mb-1 text-sm items-center flex flex-row"
@@ -252,7 +266,8 @@ class QuotePreviewModal:
                                             "w-20 text-center text-xs truncate"
                                         )
                                         ui.label(str(qty)).classes("w-16 text-center")
-                                        ui.label(f"{price}").classes(
+                                        # 3. Render price_str (snapshotted price) instead of master price
+                                        ui.label(price_str).classes(
                                             "w-32 text-right truncate"
                                         )
 

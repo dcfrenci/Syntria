@@ -22,6 +22,9 @@ allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
 allow_all_staff = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
 )
+allow_all_authenticated = RoleChecker(
+    ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]
+)
 
 ROLE_RANK = {
     "admin": 0,
@@ -125,7 +128,7 @@ async def create_user(
 
 
 @router.get("/me", response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def get_my_profile(current_user: User = Depends(allow_all_staff)):
+async def get_my_profile(current_user: User = Depends(allow_all_authenticated)):
     """Retrieve details of the currently logged-in staff member."""
     return current_user
 

@@ -196,8 +196,13 @@ async def quote_detail(
     staff_selected = staff_selected or {"staff_id": None}
     services_selected = services_selected or {}
 
-    with ui.column().classes("w-full"):
+    user_role = app.storage.user.get("role", "").lower()
+    current_person_id = app.storage.user.get("person_id")
+    
+    if user_role == "doctor" and current_person_id and staff_selected["staff_id"] is None:
+        staff_selected["staff_id"] = current_person_id
 
+    with ui.column().classes("w-full"):
         ui.label(title).classes(Style.title())
 
         persons: dict[int, dict] = {p["id"]: p for p in (seed_persons or []) if p}
@@ -214,7 +219,6 @@ async def quote_detail(
 
         # Doctor selection and detail
         with ui.grid(columns="1fr 1fr").classes("w-full gap-10 mb-8"):
-
             with ui.column():
                 ui.label("Select Doctor").classes(Style.h2())
                 with ui.card().classes("w-full"):
@@ -222,9 +226,14 @@ async def quote_detail(
                     sid = staff_selected["staff_id"]
                     if sid in persons and sid not in names:  # editing a quote of an inactive doctor
                         names[sid] = f"{persons[sid]['first_name']} {persons[sid]['last_name']}"
-                    ui.select(options=names, with_input=True).bind_value(
+                    
+                    # 3. Render select widget and disable if the user is a doctor
+                    doctor_select = ui.select(options=names, with_input=True).bind_value(
                         staff_selected, "staff_id"
                     ).classes(Style.p())
+
+                    if user_role == "doctor":
+                        doctor_select.props("disable")
 
             with ui.column():
                 ui.label("Doctor Details").classes(Style.h2())
