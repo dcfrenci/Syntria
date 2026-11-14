@@ -27,7 +27,6 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
 # --- Per-account brute-force protection (in-memory: valid because uvicorn runs ONE worker) ---
 _DUMMY_HASH = get_password_hash("dummy-password-0")
 MAX_FAILS = 5
-MAX_FAILS_PER_EMAIL = 50
 WINDOW_SECONDS = 15 * 60
 MAX_TRACKED = 10_000
 _fails: dict[str, deque[float]] = defaultdict(deque)
@@ -121,12 +120,19 @@ async def login_for_access_token(
     )[:64]
     email_hash = hashlib.sha256(email_key.encode()).hexdigest()[:12]
     pair_key = f"{ip}|{email_key}"
+
+    # Hard lock for identical ip|email pairs
     try:
         _check_throttle(pair_key)
-        _check_throttle(email_key, MAX_FAILS_PER_EMAIL)
     except HTTPException:
         log.warning("login throttled ip=%s email_sha=%s", ip, email_hash)
         raise
+
+    # Progressive delay for email target regardless of IP to prevent account-targeted DoS
+    now = time.monotonic()
+    email_fails_q = _prune(email_key, now)
+    if email_fails_q:
+        await asyncio.sleep(min(len(email_fails_q), 5))
 
     query = (
         select(User)

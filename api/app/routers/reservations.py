@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,14 @@ from app.schemas.reservations import (
 )
 
 router = APIRouter(prefix="/reservations", tags=["Reservations"])
+
+
+def _assert_visible(res, role):
+    if role != "admin" and (
+        res.patient.email.lower() == settings.ADMIN_EMAIL.lower()
+        or any(s.email.lower() == settings.ADMIN_EMAIL.lower() for s in res.staff)
+    ):
+        raise HTTPException(404, "Reservation not found.")
 
 
 @router.post(
@@ -37,8 +44,6 @@ async def create_reservation(
             status.HTTP_403_FORBIDDEN,
             detail="Self-only access permitted. Must be assigned as staff.",
         )
-        
-
 
     # 2. Verify patient exists
     patient = await db.get(Person, payload.patient_id)
@@ -46,9 +51,6 @@ async def create_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
         )
-
-    
-
 
     # 4. Verify staff exist and check Staff double-booking
     staff_members = (
@@ -63,20 +65,23 @@ async def create_reservation(
             detail="One or more staff IDs are invalid.",
         )
 
+    if role != "admin" and (
+        patient.email.lower() == settings.ADMIN_EMAIL.lower()
+        or any(s.email.lower() == settings.ADMIN_EMAIL.lower() for s in staff_members)
+    ):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
+
     await lock_schedule(db)
-    
+
     msg = await find_conflict(
-        db, payload.reservation_date, payload.duration_minutes,
-        payload.patient_id, payload.staff_ids,
+        db,
+        payload.reservation_date,
+        payload.duration_minutes,
+        payload.patient_id,
+        payload.staff_ids,
     )
     if msg:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
-    
-    if role != "admin" and (
-        patient.email == settings.ADMIN_EMAIL
-        or any(s.email == settings.ADMIN_EMAIL for s in staff_members)
-    ):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
 
     # 5. Create Reservation
     reservation = Reservation(
@@ -115,12 +120,8 @@ async def get_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
-        
-    if role != "admin" and (
-        reservation.patient.email == settings.ADMIN_EMAIL
-        or any(s.email == settings.ADMIN_EMAIL for s in reservation.staff)
-    ):
-        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Reservation not found.")
+
+    _assert_visible(reservation, role)
 
     if role in ["doctor", "assistant"] and current_user.person_id not in [
         s.id for s in reservation.staff
@@ -153,7 +154,7 @@ async def update_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-        
+
     await lock_schedule(db)
 
     reservation = await db.get(Reservation, reservation_id)
@@ -161,6 +162,8 @@ async def update_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
+
+    _assert_visible(reservation, role)
 
     if role == "doctor" and current_user.person_id not in [
         s.id for s in reservation.staff
@@ -177,6 +180,19 @@ async def update_reservation(
     target_patient_id = update_data.get("patient_id", reservation.patient_id)
     target_staff_ids = update_data.get("staff_ids", [s.id for s in reservation.staff])
 
+    if role == "doctor" and current_user.person_id not in target_staff_ids:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail="Self-only access permitted. Must be assigned as staff.",
+        )
+
+    if "patient_id" in update_data:
+        patient = await db.get(Person, target_patient_id)
+        if not patient:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
+            )
+
     if "staff_ids" in update_data:
         staff_members = (
             (await db.execute(select(Person).where(Person.id.in_(target_staff_ids))))
@@ -189,10 +205,17 @@ async def update_reservation(
                 detail="One or more staff IDs are invalid.",
             )
 
-    if any(k in update_data for k in ("reservation_date", "duration_minutes", "patient_id", "staff_ids")):
+    if any(
+        k in update_data
+        for k in ("reservation_date", "duration_minutes", "patient_id", "staff_ids")
+    ):
         msg = await find_conflict(
-            db, target_date, target_duration, target_patient_id,
-            target_staff_ids, exclude_id=reservation_id,
+            db,
+            target_date,
+            target_duration,
+            target_patient_id,
+            target_staff_ids,
+            exclude_id=reservation_id,
         )
         if msg:
             raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
@@ -200,7 +223,6 @@ async def update_reservation(
     if "staff_ids" in update_data:
         reservation.staff.clear()
         reservation.staff.extend(staff_members)
-
 
     # 3. Apply standard scalar updates
     if "description" in update_data:
@@ -244,7 +266,7 @@ async def get_reservations(
         count_query = count_query.where(
             Reservation.patient_id == current_user.person_id
         )
-        
+
     if role != "admin":
         hide = ~Reservation.patient.has(Person.email == settings.ADMIN_EMAIL)
         query, count_query = query.where(hide), count_query.where(hide)
@@ -266,6 +288,9 @@ async def delete_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
+
+    role = current_user.role.name.lower()
+    _assert_visible(reservation, role)
 
     await db.delete(reservation)
     return None

@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.services.privileges import _guard, _is_admin, _active_admin_count
 from app.models import User, Person, ReminderPreference, Quote, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.persons import (
@@ -24,7 +25,7 @@ allow_delete = RoleChecker(["admin", "manager"])
 
 def _hide_admin(person: Person, actor: User) -> None:
     """Non-admins must not see, edit or delete the system admin's Person record."""
-    if person.email == settings.ADMIN_EMAIL and actor.role.name.lower() != "admin":
+    if person.email.lower() == settings.ADMIN_EMAIL.lower() and actor.role.name.lower() != "admin":
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Person not found.")
 
 
@@ -34,15 +35,14 @@ async def create_person(
     db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
-    # Check for email conflict
-    email_check = await db.execute(select(Person).where(Person.email == payload.email))
-    if email_check.scalar_one_or_none():
+    email = payload.email.lower()
+    exists = await db.execute(select(Person.id).where(func.lower(Person.email) == email))
+    if exists.first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=f"A person with email '{payload.email}' already exists.",
+            detail=f"A person with email '{email}' already exists.",
         )
 
-    # Validate reminder preference if supplied
     if payload.reminder_preference_id:
         pref = await db.get(ReminderPreference, payload.reminder_preference_id)
         if not pref:
@@ -51,14 +51,15 @@ async def create_person(
                 detail=f"Reminder preference ID {payload.reminder_preference_id} not found.",
             )
 
-    person = Person(**payload.model_dump())
+    payload_data = {**payload.model_dump(), "email": email}
+    person = Person(**payload_data)
     db.add(person)
     await db.flush()
     await db.refresh(person, ["reminder_preference"])
     return person
 
 
-@router.get("/", response_model=PersonListResponse, status_code=status.HTTP_200_OK)
+@router.get("/", status_code=status.HTTP_200_OK)
 async def get_persons(
     db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
@@ -68,6 +69,18 @@ async def get_persons(
     ),
     current_user: User = Depends(allow_read),
 ):
+    role = current_user.role.name.lower()
+    is_restricted = role in ("doctor", "assistant")
+
+    # Restrict doctors and assistants to targeted searches
+    if is_restricted:
+        if not search or len(search.strip()) < 3:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="Search term (min 3 chars) required."
+            )
+        limit = min(limit, 20)
+
     filters = []
 
     if search:
@@ -83,8 +96,8 @@ async def get_persons(
                 )
             )
 
-    if current_user.role.name.lower() != "admin":
-        filters.append(Person.email != settings.ADMIN_EMAIL)
+    if role != "admin":
+        filters.append(func.lower(Person.email) != settings.ADMIN_EMAIL.lower())
 
     query = select(Person).options(selectinload(Person.reminder_preference))
     count_query = select(func.count(Person.id))
@@ -98,6 +111,26 @@ async def get_persons(
         query.order_by(Person.last_name, Person.first_name).offset(skip).limit(limit)
     )
     persons = (await db.execute(query)).scalars().all()
+
+    # Return brief schema and audit the read for restricted roles
+    if is_restricted:
+        # Assuming an AuditLog model exists in your models directory
+        from app.models import AuditLog 
+        
+        audit_entry = AuditLog(
+            user_id=current_user.id,
+            action="SEARCH_PERSONS_LIST",
+            details=f"Doctor/Assistant searched persons list with term: '{search}'"
+        )
+        db.add(audit_entry)
+        await db.flush()
+
+        # Return a brief schema: id, first_name, last_name
+        brief_persons = [
+            {"id": p.id, "first_name": p.first_name, "last_name": p.last_name}
+            for p in persons
+        ]
+        return {"total": total, "persons": brief_persons}
 
     return {"total": total, "persons": persons}
 
@@ -184,7 +217,10 @@ async def update_person(
     person = (
         await db.execute(
             select(Person)
-            .options(selectinload(Person.reminder_preference))
+            .options(
+                selectinload(Person.reminder_preference), 
+                selectinload(Person.user_account)
+            )
             .where(Person.id == person_id)
         )
     ).scalar_one_or_none()
@@ -198,24 +234,30 @@ async def update_person(
 
     update_data = payload.model_dump(exclude_unset=True)
 
+    # Privilege guard: Prevent lower roles from changing higher-role login emails
+    if person.user_account and person.id != current_user.person_id and "email" in update_data:
+        await _guard(db, current_user, target=person.user_account)
+
+    if "email" in update_data:
+        update_data["email"] = update_data["email"].lower()
+
     if (
-        person.email == settings.ADMIN_EMAIL
+        person.email.lower() == settings.ADMIN_EMAIL.lower()
         and "email" in update_data
-        and update_data["email"] != person.email
+        and update_data["email"] != person.email.lower()
     ):
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="The admin email is bound to ADMIN_EMAIL; change it in .env and in the database together.",
         )
 
-    # Validate email uniqueness if changing email
-    if "email" in update_data and update_data["email"] != person.email:
+    if "email" in update_data and update_data["email"] != person.email.lower():
         email_collision = await db.execute(
-            select(Person).where(
-                Person.email == update_data["email"], Person.id != person_id
+            select(Person.id).where(
+                func.lower(Person.email) == update_data["email"], Person.id != person_id
             )
         )
-        if email_collision.scalar_one_or_none():
+        if email_collision.first():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Email '{update_data['email']}' is already in use.",
@@ -254,11 +296,24 @@ async def delete_person(
             status.HTTP_404_NOT_FOUND, detail=f"Person with ID {person_id} not found."
         )
     _hide_admin(person, current_user)
-    if person.email == settings.ADMIN_EMAIL:
+    if person.email.lower() == settings.ADMIN_EMAIL.lower():
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             detail="The system admin person cannot be deleted.",
         )
+    
+    # Prevent bypass of admin and rank guards via cascading deletes
+    target_user = (
+        await db.execute(select(User).where(User.person_id == person_id))
+    ).scalar_one_or_none()
+    
+    if target_user:
+        await _guard(db, current_user, target=target_user)
+        if _is_admin(target_user) and target_user.is_active and await _active_admin_count(db) <= 1:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, 
+                detail="Cannot delete the last active admin."
+            )
     
     await db.delete(person)
     try:

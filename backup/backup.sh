@@ -34,7 +34,7 @@ echo "[backup] wrote $FINAL"
 
 # local retention: delete only files older than KEEP_DAYS AND outside the newest 3
 ls -1t "$DIR"/syntria-* 2>/dev/null | tail -n +4 | while read -r f; do
-  [ -n "$(find "$f" -mtime +"$KEEP_DAYS")" ] && rm -f "$f"
+  if [ -n "$(find "$f" -mtime +"$KEEP_DAYS")" ]; then rm -f "$f"; fi
 done
 
 # optional off-site copy (encrypted only)

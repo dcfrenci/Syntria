@@ -87,9 +87,12 @@ def login_page():
                     f"{payload.get('first_name', '')} {payload.get('last_name', '')}".strip()
                 )
                 app.storage.user["role"] = payload.get("role", "Unknown").capitalize()
+                app.storage.user["person_id"] = payload.get("person_id") 
+
             except Exception:
                 app.storage.user["name"] = "User"
                 app.storage.user["role"] = "Role"
+                app.storage.user["person_id"] = None
             ui.navigate.to("/home")
 
         ui.button("Sign In", on_click=try_login).classes("w-full mt-4")

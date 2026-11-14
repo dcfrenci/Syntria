@@ -1,20 +1,42 @@
 name: ci
+
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   static:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: tttttttttttttttt
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.x
+      - uses: actions/setup-python@0b9264197022ca95e263d9134a65ef84ed97efd6 # v6.x
         with: { python-version: "3.12" }
-      - run: pip install ruff pip-audit bandit pytest -r api/requirements.lock
+      - run: pip install ruff==0.9.0 pip-audit==2.7.3 bandit==1.8.0 pytest==8.3.4 pytest-asyncio==0.23.5 -r api/requirements.lock
       - run: ruff check --select E9,F63,F7,F82 api frontend scripts
       - run: pip-audit -r api/requirements.lock
       - run: pip-audit -r frontend/requirements.lock
       - run: bandit -r api/app frontend/app -ll -q
       - run: cd api && python -m pytest -q tests
-      - uses: aquasecurity/trivy-action@master
+      - uses: aquasecurity/trivy-action@18f2510ee396bbf400e00949f2393b915647f201 # v0.29.0
         with:
           scan-type: fs
           scanners: vuln,secret,misconfig
@@ -30,7 +52,7 @@ jobs:
       COMPOSE_PROFILES: ""
       API_BASE_URL: http://127.0.0.1:18081/api/v1
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - run: ./scripts/gen-env.sh
       - run: |
           echo "ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"

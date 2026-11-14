@@ -8,11 +8,13 @@ set -a; . ./.env; set +a
 read -rp "This REPLACES the contents of '$POSTGRES_DB'. Type 'restore' to continue: " ok
 [ "$ok" = "restore" ] || exit 1
 
+docker compose exec -T backup /usr/local/bin/backup.sh
+
 docker compose stop api frontend
 if [[ "$f" == *.age ]]; then
   [ -n "$key" ] || { echo "encrypted backup: pass the age key file"; exit 1; }
   age -d -i "$key" "$f" | gunzip -c
 else
   gunzip -c "$f"
-fi | docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+fi | docker compose exec -T db psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 docker compose start api frontend

@@ -90,18 +90,19 @@ def frame(page_title: str, active_route: str):
     create_sidebar(active_route=active_route)
 
     async def check_session():
-
         if is_token_expired(app.storage.user.get("token")):
             return _logout("Your session has expired. Please log in again.")
         try:
             me = await UsersClient.get_user_me()
             if me:
                 app.storage.user["role"] = me["role"]["name"].capitalize()
+                app.storage.user["person_id"] = me["person"]["id"]
+
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
                 return _logout("Your access has changed. Please log in again.")
         except Exception:
-            pass  # transient network error: retry on next tick
+            pass # transient network error: retry on next tick
 
     def _logout(msg: str):
         app.storage.user["authenticated"] = False
