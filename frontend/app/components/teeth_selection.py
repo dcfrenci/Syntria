@@ -70,23 +70,6 @@ def teeth_selection(on_save_callback):
             elements.append("<style>svg { overflow: visible !important; }</style>")
             return "\n".join(elements)
 
-        def refresh_svg_layers():
-            if primary_switch.value:
-                img_primary.set_content(
-                    generate_teeth_svg(
-                        PRIMARY_TEETH, PRIMARY_IMG, PRIMARY_BASE_W, PRIMARY_BASE_H
-                    )
-                )
-            else:
-                img_permanent.set_content(
-                    generate_teeth_svg(
-                        PERMANENT_TEETH,
-                        PERMANENT_IMG,
-                        PERMANENT_BASE_W,
-                        PERMANENT_BASE_H,
-                    )
-                )
-
         primary_switch = ui.switch("Show Primary Dentition", value=False)
 
         PERMANENT_IMG = "app/assets/images/permanent_stylized.jpeg"

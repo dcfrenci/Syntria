@@ -3,7 +3,6 @@ import datetime
 from nicegui import app, ui
 
 from api_client.agenda import AgendaClient
-from api_client.persons import PersonsClient
 from api_client.users import UsersClient
 from components.style import Style
 from components.calendar import Calendar

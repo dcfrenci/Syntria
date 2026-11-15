@@ -61,7 +61,7 @@ class ExportModal:
                         r["reservation_date"].replace("Z", "+00:00")
                     )
                     r["formatted_date"] = dt.strftime("%d/%m/%Y %H:%M")
-                except:
+                except (KeyError, ValueError):
                     r["formatted_date"] = r.get("reservation_date")
 
                 # Extract Doctor Name (Reservations use 'staff' list)
@@ -94,11 +94,7 @@ class ExportModal:
                 _col("is_active", "Active", 100),
             ]
         else:
-            # Fallback for unknown entities
-            keys = [
-                k for k in rows[0].keys() if not isinstance(rows[0][k], (dict, list))
-            ]
-            columns = [_col(k, k.replace("_", " ").capitalize(), 150) for k in keys[:5]]
+            raise ValueError(f"Unknown entity type: {self.entity_name}")
 
         with ui.dialog() as dialog, ui.card().classes("w-full max-w-5xl p-6"):
             with ui.row().classes("w-full justify-between items-center mb-4"):

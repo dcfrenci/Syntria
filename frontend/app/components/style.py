@@ -14,12 +14,6 @@ class Style:
     def h3() -> str:
         return "text-lg font-semibold mb-2"
 
-    def h4() -> str:
-        pass
-
-    def h5() -> str:
-        pass
-
     def p() -> str:
         return "w-full text-base font-normal"
 
@@ -30,9 +24,6 @@ class Style:
     def table() -> str:
         return "w-[calc(100%-2rem)] m-4 shadow-lg rounded-xl"
 
-    def row_start() -> str:
-        pass
-
     def row_center() -> str:
         return "w-full justify-center mt-4 gap-2"
 
@@ -41,12 +32,3 @@ class Style:
 
     def dialog() -> str:
         return "w-1/2"
-
-    def card() -> str:
-        pass
-
-    def button() -> str:
-        pass
-
-    def search() -> str:
-        pass

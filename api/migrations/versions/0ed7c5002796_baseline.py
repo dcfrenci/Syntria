@@ -1,14 +1,14 @@
 """baseline
 
-Revision ID: edeb179f2afe
+Revision ID: 0ed7c5002796
 Revises: 
-Create Date: 2026-10-13 13:58:37.783399
+Create Date: 2026-11-15 16:37:50.288072
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
-
-revision = 'edeb179f2afe'
+revision = '0ed7c5002796'
 down_revision = None
 branch_labels = None
 depends_on = None
@@ -27,17 +27,26 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_categories_id'), 'categories', ['id'], unique=False)
     op.create_index(op.f('ix_categories_name'), 'categories', ['name'], unique=True)
+    op.create_table('preset_images',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('content_type', sa.String(length=30), nullable=False),
+    sa.Column('data', sa.LargeBinary(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
     op.create_table('presets',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
-    sa.Column('elements', sa.JSON(), nullable=True),
-    sa.Column('margins', sa.JSON(), nullable=True),
+    sa.Column('elements', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('margins', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('version', sa.Integer(), server_default='1', nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_presets_id'), 'presets', ['id'], unique=False)
+    op.create_index('uq_presets_one_active', 'presets', ['is_active'], unique=True, postgresql_where=sa.text('is_active'))
     op.create_table('reminder_preferences',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=50), nullable=False),
@@ -93,7 +102,7 @@ def upgrade() -> None:
     sa.Column('valid_until', sa.Date(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['patient_id'], ['persons.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['patient_id'], ['persons.id'], ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['staff_id'], ['persons.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -108,7 +117,7 @@ def upgrade() -> None:
     sa.Column('description', sa.String(length=500), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
-    sa.ForeignKeyConstraint(['patient_id'], ['persons.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['patient_id'], ['persons.id'], ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_reservations_id'), 'reservations', ['id'], unique=False)
@@ -182,8 +191,10 @@ def downgrade() -> None:
     op.drop_table('roles')
     op.drop_index(op.f('ix_reminder_preferences_id'), table_name='reminder_preferences')
     op.drop_table('reminder_preferences')
+    op.drop_index('uq_presets_one_active', table_name='presets', postgresql_where=sa.text('is_active'))
     op.drop_index(op.f('ix_presets_id'), table_name='presets')
     op.drop_table('presets')
+    op.drop_table('preset_images')
     op.drop_index(op.f('ix_categories_name'), table_name='categories')
     op.drop_index(op.f('ix_categories_id'), table_name='categories')
     op.drop_table('categories')

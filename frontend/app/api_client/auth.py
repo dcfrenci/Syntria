@@ -1,11 +1,6 @@
-import os
-
 import httpx
-from dotenv import load_dotenv
 
-load_dotenv()
-
-BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+from .base import BASE_URL
 
 
 async def authenticate(username: str, password: str, client_ip: str | None = None):

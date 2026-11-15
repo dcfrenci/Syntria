@@ -5,7 +5,6 @@ from nicegui import app, ui
 
 from api_client.quotes import QuotesClient
 from api_client.services import ServicesClient
-from api_client.persons import PersonsClient
 from api_client.presets import PresetsClient
 from api_client.users import UsersClient
 from components.quote_preview_modal import QuotePreviewModal
@@ -365,8 +364,6 @@ async def quote_detail(
                     **s,
                     "category_name": (
                         s.get("category", {}).get("name", "")
-                        if isinstance(s.get("category"), dict)
-                        else getattr(s.get("category"), "name", "")
                     ),
                     "is_specific": s.get("is_specific", False),
                     "teeth": [],

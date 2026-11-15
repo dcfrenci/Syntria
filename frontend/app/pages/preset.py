@@ -1,5 +1,4 @@
 import uuid
-import inspect
 from datetime import datetime
 import logging
 import httpx
@@ -981,35 +980,8 @@ def builder_ui(state: QuoteBuilderState):
 
                 async def handle_image_upload(e: events.UploadEventArguments):
                     try:
-                        file_like = None
-                        if hasattr(e, "content") and hasattr(e.content, "read"):
-                            file_like = e.content
-                        elif hasattr(e, "file") and hasattr(e.file, "read"):
-                            file_like = e.file
-                        else:
-                            file_like = next(
-                                (
-                                    getattr(e, a)
-                                    for a in dir(e)
-                                    if hasattr(getattr(e, a), "read")
-                                ),
-                                None,
-                            )
-
-                        if not file_like:
-                            ui.notify(
-                                "Upload failed: No readable file payload found.",
-                                type="negative",
-                            )
-                            return
-
-                        content_or_coro = file_like.read()
-                        if inspect.isawaitable(content_or_coro):
-                            content = await content_or_coro
-                        else:
-                            content = content_or_coro
-
-                        name = getattr(getattr(e, "file", e), "name", "image")
+                        content = await e.file.read()
+                        name = e.file.name
                         ref = await PresetsClient.upload_image(content, name)
                         update_element(el, "content", ref)
 

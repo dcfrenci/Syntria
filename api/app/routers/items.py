@@ -23,7 +23,6 @@ async def create_item(
     db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_write),
 ):
-    cat_exists = None
 
     # Validate category exists if provided
     if payload.category_id is not None:

@@ -11,7 +11,6 @@ from app.models import User, Person, ReminderPreference, Quote, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.persons import (
     PersonCreate,
-    PersonListResponse,
     PersonResponse,
     PersonUpdate,
 )

@@ -3,14 +3,14 @@ from nicegui import app, ui
 
 def create_sidebar(active_route: str = "/"):
     """Generates the navigation drawer with hover and active states."""
-    with ui.left_drawer(value=True, fixed=True).classes(
+    drawer = ui.left_drawer(value=True, fixed=True).classes(
         "bg-gray-200 p-4 w-64 rounded-tr-3xl rounded-br-3xl"
-    ):
-
+    )
+    with drawer:
         with ui.row().classes("w-full items-center flex-nowrap py-6 gap-3 px-4"):
-            # Note: I wrapped the icon in a button so it can actually be clicked to close/open the sidebar,
-            # which is standard UI behavior, but you can change it back to just ui.icon if you prefer!
-            ui.button(icon="r_menu").props("flat round dense").classes("text-black")
+            ui.button(icon="r_menu", on_click=drawer.toggle).props(
+                "flat round dense"
+            ).classes("text-black")
             ui.image("app/assets/images/syntria_name.svg").classes("h-8 w-32")
 
         ui.separator().classes("gap-0")
@@ -33,13 +33,13 @@ def create_sidebar(active_route: str = "/"):
         # 2. MENU ITEMS CONTAINER
         # Added px-2 to the column just so the hover backgrounds of the buttons don't touch the absolute edge of the screen
         with ui.column().classes("w-full gap-2 px-2"):
-            user_role = app.storage.user.get("role", "").lower()
+            user_role_lower = app.storage.user.get("role", "").lower()
 
             menu_item("r_home", "Home", "/home")
             menu_item("r_menu_book", "Agenda", "/agenda")
-            if user_role in ["admin", "manager", "secretary"]:
+            if user_role_lower in ["admin", "manager", "secretary"]:
                 menu_item("r_person", "Persons", "/persons")
-            if user_role in [
+            if user_role_lower in [
                 "admin",
                 "manager",
                 "secretary",
@@ -48,9 +48,9 @@ def create_sidebar(active_route: str = "/"):
                 "employee",
             ]:
                 menu_item("r_attach_money", "Pricing", "/pricing")
-            if user_role in ["admin", "manager", "secretary", "doctor"]:
+            if user_role_lower in ["admin", "manager", "secretary", "doctor"]:
                 menu_item("r_edit", "Customize quote", "/preset")
-            if user_role in ["admin", "manager"]:
+            if user_role_lower in ["admin", "manager"]:
                 menu_item("r_settings", "Setting", "/settings")
 
         ui.space()

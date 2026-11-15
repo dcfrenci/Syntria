@@ -20,9 +20,6 @@ router = APIRouter(prefix="/users", tags=["Users & Staff"])
 
 allow_admin_mgr = RoleChecker(["admin", "manager"])
 allow_admin_mgr_sec = RoleChecker(["admin", "manager", "secretary"])
-allow_all_staff = RoleChecker(
-    ["admin", "manager", "secretary", "doctor", "assistant", "employee"]
-)
 allow_all_authenticated = RoleChecker(
     ["admin", "manager", "secretary", "doctor", "assistant", "employee", "client"]
 )

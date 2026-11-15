@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from sqlalchemy import select, text, func, select
+from sqlalchemy import select, text, func
 
 from app.models import Reservation
 from app.models import Person, Reservation

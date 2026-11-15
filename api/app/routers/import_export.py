@@ -5,7 +5,7 @@ import logging
 import asyncio
 import base64
 import csv
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Literal, get_args
 from collections import OrderedDict
 
