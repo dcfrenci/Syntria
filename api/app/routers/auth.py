@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
-
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, get_password_hash, verify_password
@@ -30,6 +29,8 @@ MAX_FAILS = 5
 WINDOW_SECONDS = 15 * 60
 MAX_TRACKED = 10_000
 _fails: dict[str, deque[float]] = defaultdict(deque)
+
+_BCRYPT_GATE = asyncio.Semaphore(4)
 
 
 def _prune(key: str, now: float) -> deque[float] | None:
@@ -70,7 +71,7 @@ def _record_failure(key: str) -> None:
 async def get_current_user(
     request: Request,
     token: Annotated[str, Depends(oauth2_scheme)],
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -84,14 +85,12 @@ async def get_current_user(
         user_id = int(payload.get("sub"))
     except (jwt.PyJWTError, TypeError, ValueError):
         raise credentials_exception
-
     query = (
         select(User)
         .where(User.id == user_id)
         .options(joinedload(User.person), joinedload(User.role))
     )
     user = (await db.execute(query)).scalar_one_or_none()
-
     if user is None:
         raise credentials_exception
     if not user.is_active:
@@ -102,7 +101,6 @@ async def get_current_user(
         user.updated_at.timestamp()
     ):
         raise credentials_exception
-
     request.state.user_id = user.id
     return user
 
@@ -111,7 +109,7 @@ async def get_current_user(
 async def login_for_access_token(
     request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
 ):
     email_key = form_data.username.strip().lower()[:255]
     ip = (
@@ -120,7 +118,6 @@ async def login_for_access_token(
     )[:64]
     email_hash = hashlib.sha256(email_key.encode()).hexdigest()[:12]
     pair_key = f"{ip}|{email_key}"
-
     # Hard lock for identical ip|email pairs
     try:
         _check_throttle(pair_key)
@@ -132,7 +129,8 @@ async def login_for_access_token(
     now = time.monotonic()
     email_fails_q = _prune(email_key, now)
     if email_fails_q:
-        await asyncio.sleep(min(len(email_fails_q), 5))
+        await db.rollback()
+        await asyncio.sleep(min(len(email_fails_q), 2))
 
     query = (
         select(User)
@@ -142,12 +140,13 @@ async def login_for_access_token(
     )
     user = (await db.execute(query)).scalar_one_or_none()
 
-    # Always run bcrypt, even for unknown emails, so timing doesn't reveal which emails exist
-    password_ok = await asyncio.to_thread(
-        verify_password,
-        form_data.password,
-        user.hashed_password if user else _DUMMY_HASH,
-    )
+    async with _BCRYPT_GATE:
+        password_ok = await asyncio.to_thread(
+            verify_password,
+            form_data.password,
+            user.hashed_password if user else _DUMMY_HASH,
+        )
+
     if not user or not password_ok:
         _record_failure(pair_key)
         _record_failure(email_key)
@@ -157,12 +156,10 @@ async def login_for_access_token(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated"
         )
-
     _fails.pop(pair_key, None)
     token_data = {
         "sub": str(user.id),
@@ -170,6 +167,7 @@ async def login_for_access_token(
         "role": user.role.name,
         "first_name": user.person.first_name,
         "last_name": user.person.last_name,
+        "person_id": user.person_id,
     }
     return {
         "access_token": create_access_token(data=token_data),

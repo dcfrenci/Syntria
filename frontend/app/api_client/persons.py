@@ -36,7 +36,7 @@ class PersonsClient:
                 "/persons/", params={"search": query, "limit": limit}
             )
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 403:
+            if e.response.status_code in (400, 403):
                 return []
             raise
         return result.get("persons", []) if result else []

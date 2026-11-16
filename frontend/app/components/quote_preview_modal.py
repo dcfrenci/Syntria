@@ -1,222 +1,239 @@
 import asyncio
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from typing import Any, Dict, List, Optional, Tuple
 
 from nicegui import ui
 
+from api_client.base import BASE_URL
 from components.images import image_src
 
-A4_WIDTH = 794
-A4_HEIGHT = 1123
-HEADER_HEIGHT = 40
-ROW_HEIGHT = 45
-FOOTER_HEIGHT = 50
+# Layout Constants (96 DPI A4 Standard)
+A4_WIDTH_PX = 794
+A4_HEIGHT_PX = 1123
 
+HEADER_HEIGHT_PX = 40
+ROW_HEIGHT_PX = 45
+FOOTER_HEIGHT_PX = 50
+DEFAULT_MARGIN_PX = 96.0
+
+
+# --- Utility Helpers ---
+
+def format_currency(amount: Any) -> str:
+    """Format numerical values into EUR currency format safely."""
+    try:
+        val = Decimal(str(amount or 0))
+        return f"€{val:,.2f}"
+    except (InvalidOperation, TypeError, ValueError):
+        return f"€{amount}"
+
+
+def format_date(raw_date: Optional[str]) -> str:
+    """Parse ISO date strings into DD/MM/YYYY string format."""
+    if not raw_date:
+        return "N/A"
+    try:
+        dt_obj = datetime.fromisoformat(str(raw_date).replace("Z", "+00:00"))
+        return dt_obj.strftime("%d/%m/%Y")
+    except (ValueError, TypeError):
+        date_parts = str(raw_date).split("T")[0].split("-")
+        if len(date_parts) == 3:
+            return f"{date_parts[2]}/{date_parts[1]}/{date_parts[0]}"
+        return str(raw_date)
+
+
+def get_page_margins_css(margins: Dict[str, Any]) -> str:
+    """Helper for generating inline CSS page padding from margin definitions."""
+    top = margins.get("top", 20)
+    right = margins.get("right", 20)
+    bottom = margins.get("bottom", 20)
+    left = margins.get("left", 20)
+    return f"padding: {top}mm {right}mm {bottom}mm {left}mm;"
+
+
+# --- Primary Modal Class ---
 
 class QuotePreviewModal:
     """
-    A reusable modal for rendering an A4 document preview from preset elements and real quote data.
-    Now supports instant headless export (direct to browser print dialog).
+    A reusable modal and print service for rendering A4 document previews 
+    from customizable preset templates and dynamic quote data.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.dialog = ui.dialog()
 
-    def _prepare_data(self, preset: dict, quote: dict):
+    def _prepare_data(
+        self, preset: Dict[str, Any], quote: Dict[str, Any]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], str, str, str, Optional[Dict[str, Any]]]:
+        """Calculates item pagination splits across A4 pages and prepares metadata."""
         elements = preset.get("elements", [])
         margins = preset.get(
-            "margins", {"top": 96.0, "right": 96.0, "bottom": 96.0, "left": 96.0}
+            "margins",
+            {
+                "top": DEFAULT_MARGIN_PX,
+                "right": DEFAULT_MARGIN_PX,
+                "bottom": DEFAULT_MARGIN_PX,
+                "left": DEFAULT_MARGIN_PX,
+            },
         )
 
-        patient = quote.get("patient", {})
+        patient = quote.get("patient") or {}
         patient_name = (
             f"{patient.get('first_name', '')} {patient.get('last_name', '')}".strip()
+            or "Unknown Client"
         )
-        if not patient_name:
-            patient_name = "Unknown Client"
 
-        raw_date = quote.get("created_at", "")
-        if raw_date:
-            try:
-                dt_obj = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-                date_str = dt_obj.strftime("%d/%m/%Y")
-            except ValueError:
-                date_parts = raw_date.split("T")[0].split("-")
-                if len(date_parts) == 3:
-                    date_str = f"{date_parts[2]}/{date_parts[1]}/{date_parts[0]}"
-                else:
-                    date_str = raw_date
-        else:
-            date_str = "N/A"
+        date_str = format_date(quote.get("created_at"))
+        total_amount = format_currency(quote.get("total_amount", "0.00"))
 
+        quote_el = next((e for e in elements if e.get("type") == "quote"), None)
+        pages_data: List[Dict[str, Any]] = []
         items = quote.get("quote_items", [])
-        total_amount = quote.get("total_amount", "0.00")
-
-        quote_el = next((e for e in elements if e["type"] == "quote"), None)
-        pages_data = []
 
         if quote_el and items:
             items_remaining = list(items)
-            avail_1 = A4_HEIGHT - margins["bottom"] - quote_el["y"]
-            max_items_1 = max(
-                0, int((avail_1 - HEADER_HEIGHT - FOOTER_HEIGHT) // ROW_HEIGHT)
-            )
+            avail_first = A4_HEIGHT_PX - float(margins.get("bottom", DEFAULT_MARGIN_PX)) - float(quote_el.get("y", 0))
+            max_items_first = max(0, int((avail_first - HEADER_HEIGHT_PX - FOOTER_HEIGHT_PX) // ROW_HEIGHT_PX))
 
-            if max_items_1 >= len(items_remaining):
-                pages_data.append(
-                    {
-                        "items": items_remaining,
-                        "is_last": True,
-                        "start_y": quote_el["y"],
-                    }
-                )
+            if max_items_first >= len(items_remaining):
+                pages_data.append({
+                    "items": items_remaining,
+                    "is_last": True,
+                    "start_y": quote_el.get("y", 0),
+                })
                 items_remaining = []
             else:
-                if max_items_1 > 0:
-                    pages_data.append(
-                        {
-                            "items": items_remaining[:max_items_1],
-                            "is_last": False,
-                            "start_y": quote_el["y"],
-                        }
-                    )
-                    items_remaining = items_remaining[max_items_1:]
+                if max_items_first > 0:
+                    pages_data.append({
+                        "items": items_remaining[:max_items_first],
+                        "is_last": False,
+                        "start_y": quote_el.get("y", 0),
+                    })
+                    items_remaining = items_remaining[max_items_first:]
                 else:
-                    pages_data.append(
-                        {"items": [], "is_last": False, "start_y": quote_el["y"]}
-                    )
+                    pages_data.append({
+                        "items": [],
+                        "is_last": False,
+                        "start_y": quote_el.get("y", 0),
+                    })
+
+            top_margin = float(margins.get("top", DEFAULT_MARGIN_PX))
+            avail_subsequent = A4_HEIGHT_PX - float(margins.get("bottom", DEFAULT_MARGIN_PX)) - top_margin
+            max_items_subsequent = max(1, int((avail_subsequent - HEADER_HEIGHT_PX - FOOTER_HEIGHT_PX) // ROW_HEIGHT_PX))
 
             while items_remaining:
-                avail_n = A4_HEIGHT - margins["bottom"] - margins["top"]
-                max_items_n = max(
-                    1, int((avail_n - HEADER_HEIGHT - FOOTER_HEIGHT) // ROW_HEIGHT)
-                )
-
-                if max_items_n >= len(items_remaining):
-                    pages_data.append(
-                        {
-                            "items": items_remaining,
-                            "is_last": True,
-                            "start_y": margins["top"],
-                        }
-                    )
+                if max_items_subsequent >= len(items_remaining):
+                    pages_data.append({
+                        "items": items_remaining,
+                        "is_last": True,
+                        "start_y": top_margin,
+                    })
                     items_remaining = []
                 else:
-                    pages_data.append(
-                        {
-                            "items": items_remaining[:max_items_n],
-                            "is_last": False,
-                            "start_y": margins["top"],
-                        }
-                    )
-                    items_remaining = items_remaining[max_items_n:]
+                    pages_data.append({
+                        "items": items_remaining[:max_items_subsequent],
+                        "is_last": False,
+                        "start_y": top_margin,
+                    })
+                    items_remaining = items_remaining[max_items_subsequent:]
         else:
             pages_data.append({"items": [], "is_last": True, "start_y": 0})
 
-        return (
-            pages_data,
-            elements,
-            patient_name,
-            date_str,
-            total_amount,
-            quote_el,
-        )
+        return pages_data, elements, patient_name, date_str, total_amount, quote_el
 
     def _render_pages(
         self,
-        pages_data,
-        elements,
-        patient_name,
-        date_str,
-        total_amount,
-        quote_el,
-        scale,
-    ):
-        scaled_w = A4_WIDTH * scale
-        scaled_h = A4_HEIGHT * scale
+        pages_data: List[Dict[str, Any]],
+        elements: List[Dict[str, Any]],
+        patient_name: str,
+        date_str: str,
+        total_amount: str,
+        quote_el: Optional[Dict[str, Any]],
+        scale: float = 1.0,
+    ) -> None:
+        """Renders page elements dynamically with CSS absolute positioning."""
+        scaled_w = A4_WIDTH_PX * scale
+        scaled_h = A4_HEIGHT_PX * scale
+        shadow_style = "box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);" if scale < 1.0 else ""
 
-        shadow_style = (
-            "box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);" if scale < 1.0 else ""
-        )
-
-        for i, p_data in enumerate(pages_data):
+        for page_idx, p_data in enumerate(pages_data):
             is_last_page = p_data.get("is_last", True)
 
             with ui.element("div").classes("shrink-0").style(
                 f"width: {scaled_w}px; height: {scaled_h}px; position: relative;"
             ):
                 with ui.element("div").style(
-                    f"width: {A4_WIDTH}px; height: {A4_HEIGHT}px; "
+                    f"width: {A4_WIDTH_PX}px; height: {A4_HEIGHT_PX}px; "
                     f"transform: scale({scale}); transform-origin: top left; "
                     f"position: absolute; top: 0; left: 0; "
                     f"background-color: white; border-radius: 4px; {shadow_style}"
                 ):
                     for el in elements:
-                        if el["type"] == "quote":
+                        el_type = el.get("type")
+                        if el_type == "quote":
                             continue
-                        if el["type"] == "sign" and not is_last_page:
+                        if el_type == "sign" and not is_last_page:
                             continue
-                        if el["type"] not in ["sign", "quote"] and i > 0:
+                        if el_type not in ["sign", "quote"] and page_idx > 0:
                             continue
+
+                        x, y = el.get("x", 0), el.get("y", 0)
+                        w, h = el.get("w", 100), el.get("h", 50)
 
                         with ui.element("div").style(
-                            f"position: absolute; left: {el['x']}px; top: {el['y']}px; "
-                            f"width: {el['w']}px; height: {el['h']}px;"
+                            f"position: absolute; left: {x}px; top: {y}px; width: {w}px; height: {h}px;"
                         ):
-                            if el["type"] in ["text", "client", "date"]:
+                            if el_type in ["text", "client", "date"]:
                                 f_size = el.get("font_size", 14)
                                 f_weight = "bold" if el.get("font_bold") else "normal"
-                                f_style = (
-                                    "italic" if el.get("font_italic") else "normal"
-                                )
+                                f_style = "italic" if el.get("font_italic") else "normal"
                                 style_str = f"font-size: {f_size}px; font-weight: {f_weight}; font-style: {f_style};"
 
-                                if el["type"] == "text":
-                                    ui.label(el["content"]).classes(
+                                if el_type == "text":
+                                    ui.label(el.get("content", "")).classes(
                                         "w-full h-full whitespace-pre-wrap text-gray-800"
                                     ).style(style_str)
-                                elif el["type"] == "client":
-                                    ui.label(f"{patient_name}").classes(
+                                elif el_type == "client":
+                                    ui.label(patient_name).classes(
                                         "w-full h-full text-gray-900"
                                     ).style(style_str)
-                                elif el["type"] == "date":
+                                elif el_type == "date":
                                     ui.label(f"Date: {date_str}").classes(
                                         "w-full h-full text-gray-800"
                                     ).style(style_str)
 
-                            elif el["type"] == "image":
-                                if el.get("content"):
+                            elif el_type == "image":
+                                img_content = el.get("content", "")
+                                if img_content:
                                     fit_style = el.get("image_fit", "contain")
                                     pos_x = el.get("image_pos_x", 50)
                                     pos_y = el.get("image_pos_y", 50)
+                                    src = image_src(img_content) if callable(image_src) else img_content
                                     ui.element("img").props(
-                                        f'src="{image_src(el["content"])}" draggable="false"'
+                                        f'src="{src}" draggable="false"'
                                     ).classes(
                                         f"w-full h-full pointer-events-none object-{fit_style}"
                                     ).style(
                                         f"object-position: {pos_x}% {pos_y}%;"
                                     )
 
-                            elif el["type"] == "sign":
-                                with ui.column().classes(
-                                    "w-full h-full justify-end gap-0"
-                                ):
-                                    ui.label("Signature:").classes(
-                                        "text-xs text-gray-500 mb-1"
-                                    )
+                            elif el_type == "sign":
+                                with ui.column().classes("w-full h-full justify-end gap-0"):
+                                    ui.label("Signature:").classes("text-xs text-gray-500 mb-1")
                                     ui.label().classes("border-b border-black w-full")
 
                     if quote_el:
-                        current_items = p_data["items"]
+                        current_items = p_data.get("items", [])
                         calc_h = (
-                            HEADER_HEIGHT
-                            + (len(current_items) * ROW_HEIGHT)
-                            + (FOOTER_HEIGHT if is_last_page else 0)
+                            HEADER_HEIGHT_PX
+                            + (len(current_items) * ROW_HEIGHT_PX)
+                            + (FOOTER_HEIGHT_PX if is_last_page else 0)
                         )
 
                         with ui.element("div").style(
-                            f"position: absolute; left: {quote_el['x']}px; top: {p_data['start_y']}px; "
-                            f"width: {quote_el['w']}px; height: {calc_h}px;"
+                            f"position: absolute; left: {quote_el.get('x', 0)}px; top: {p_data.get('start_y', 0)}px; "
+                            f"width: {quote_el.get('w', 700)}px; height: {calc_h}px;"
                         ):
                             with ui.column().classes("w-full h-full gap-0"):
                                 with ui.row().classes(
@@ -228,10 +245,10 @@ class QuotePreviewModal:
                                     ui.label("Unit Price").classes("w-32 text-right")
 
                                 for item in current_items:
-                                    i_data = item.get("item", {})
+                                    i_data = item.get("item") or {}
                                     name = i_data.get("name", "Unknown Service")
                                     qty = item.get("quantity", 1)
-                                    
+
                                     is_spec = i_data.get("is_specific", False)
                                     teeth_arr = item.get("teeth", [])
                                     teeth_str = (
@@ -240,21 +257,10 @@ class QuotePreviewModal:
                                         else "-"
                                     )
 
-                                    # 1. Prioritize snapshotted unit_price
                                     raw_price = item.get("unit_price")
                                     if raw_price is None:
                                         raw_price = i_data.get("price", "0.00")
-                                        
-                                    unit_price = Decimal(str(raw_price))
-                                    discount = Decimal(str(item.get("discount", "0.00")))
-                                    
-                                    line_subtotal = unit_price * qty
-                                    line_net_total = max(line_subtotal - discount, Decimal("0.00"))
-
-                                    # 2. Format snapshotted price string with currency symbol
-                                    price_str = f"€{unit_price:.2f}"
-                                    if len(price_str) > 15:
-                                        price_str = price_str[:12] + "..."
+                                    price_formatted = format_currency(raw_price)
 
                                     with ui.row().classes(
                                         "w-full text-gray-800 mb-1 text-sm items-center flex flex-row"
@@ -266,8 +272,7 @@ class QuotePreviewModal:
                                             "w-20 text-center text-xs truncate"
                                         )
                                         ui.label(str(qty)).classes("w-16 text-center")
-                                        # 3. Render price_str (snapshotted price) instead of master price
-                                        ui.label(price_str).classes(
+                                        ui.label(price_formatted).classes(
                                             "w-32 text-right truncate"
                                         )
 
@@ -275,32 +280,19 @@ class QuotePreviewModal:
                                     with ui.row().classes(
                                         "w-full border-t border-gray-400 pt-2 mt-2 font-bold text-gray-900 text-sm flex flex-row"
                                     ):
-                                        ui.label("Total Amount").classes(
-                                            "flex-1 text-right pr-4"
-                                        )
-                                        disp_total = (
-                                            str(total_amount)[:12] + "..."
-                                            if len(str(total_amount)) > 15
-                                            else str(total_amount)
-                                        )
-                                        ui.label(f"€{disp_total}").classes(
-                                            "w-32 text-right truncate"
-                                        )
+                                        ui.label("Total Amount").classes("flex-1 text-right pr-4")
+                                        ui.label(total_amount).classes("w-32 text-right truncate")
 
-    async def process_direct(self, preset: dict, quote: dict, action: str):
-        """Generates the DOM dynamically in the background and prints instantly"""
-        (
-            pages_data,
-            elements,
-            patient_name,
-            date_str,
-            total_amount,
-            quote_el,
-        ) = self._prepare_data(preset, quote)
-
-        container_id = (
-            f"quote_headless_{quote.get('id', 'new')}_{int(datetime.now().timestamp())}"
+    async def process_direct(
+        self, preset: Dict[str, Any], quote: Dict[str, Any], action: str = "print"
+    ) -> None:
+        """Renders headless DOM in background and triggers native print/download dialog."""
+        pages_data, elements, patient_name, date_str, total_amount, quote_el = self._prepare_data(
+            preset, quote
         )
+
+        quote_id = quote.get("id", "new")
+        container_id = f"quote_headless_{quote_id}_{int(datetime.now().timestamp())}"
         container = (
             ui.element("div")
             .props(f'id="{container_id}"')
@@ -318,7 +310,7 @@ class QuotePreviewModal:
                 scale=1.0,
             )
 
-        await asyncio.sleep(0.2)  # Allow NiceGUI to push DOM elements to the browser
+        await asyncio.sleep(0.2)
 
         ui.notify("Preparing document...", type="info")
         if action == "download":
@@ -355,8 +347,8 @@ class QuotePreviewModal:
                         background-color: white;
                     }}
                     .shrink-0 {{ 
-                        width: 794px !important; 
-                        height: 1123px !important; 
+                        width: {A4_WIDTH_PX}px !important; 
+                        height: {A4_HEIGHT_PX}px !important; 
                         page-break-after: always; 
                         overflow: hidden; 
                     }}
@@ -382,19 +374,14 @@ class QuotePreviewModal:
         """
 
         await ui.run_javascript(js)
-        container.delete()  # Cleanup the invisible container after firing the script
+        container.delete()
 
-    async def open(self, preset: dict, quote: dict):
-        """Opens the visual modal for previewing"""
+    async def open(self, preset: Dict[str, Any], quote: Dict[str, Any]) -> None:
+        """Opens the visual modal dialog for interactive document preview."""
         self.dialog.clear()
-        (
-            pages_data,
-            elements,
-            patient_name,
-            date_str,
-            total_amount,
-            quote_el,
-        ) = self._prepare_data(preset, quote)
+        pages_data, elements, patient_name, date_str, total_amount, quote_el = self._prepare_data(
+            preset, quote
+        )
 
         with self.dialog, ui.card().classes(
             "w-full max-w-5xl p-0 overflow-hidden bg-gray-200 flex flex-col items-center"
@@ -432,3 +419,13 @@ class QuotePreviewModal:
                 )
 
         self.dialog.open()
+
+
+# --- Backward Compatibility Functional Wrapper ---
+
+def show_quote_preview_modal(
+    quote: Dict[str, Any], preset: Dict[str, Any], title: str = "Print Preview"
+) -> None:
+    """Procedural wrapper for directly opening the quote preview modal."""
+    modal = QuotePreviewModal()
+    asyncio.create_task(modal.open(preset, quote))

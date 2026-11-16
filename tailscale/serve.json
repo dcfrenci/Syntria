@@ -1,18 +1,26 @@
 {
   "TCP": {
-    "443": { "HTTPS": true },
-    "8443": { "HTTPS": true },
-    "82": { "HTTPS": true }
+    "443": {
+      "HTTPS": true
+    },
+    "8443": {
+      "HTTPS": true
+    }
   },
   "Web": {
     "${TS_CERT_DOMAIN}:443": {
-      "Handlers": { "/": { "Proxy": "http://nginx:80" } }
+      "Handlers": {
+        "/": {
+          "Proxy": "http://nginx:80"
+        }
+      }
     },
     "${TS_CERT_DOMAIN}:8443": {
-      "Handlers": { "/": { "Proxy": "http://nginx:81" } }
-    },
-    "${TS_CERT_DOMAIN}:82": {
-      "Handlers": { "/": { "Proxy": "http://nginx:82" } }
+      "Handlers": {
+        "/": {
+          "Proxy": "http://nginx:81"
+        }
+      }
     }
   },
   "AllowFunnel": {

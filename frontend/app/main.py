@@ -27,7 +27,6 @@ logging.basicConfig(
     format='{"ts":"%(asctime)s","level":"%(levelname)s","logger":"%(name)s","msg":"%(message)s"}',
 )
 
-# Same matrix as the sidebar and role_conf.md. The backend still enforces everything; this is defense in depth.
 ROUTE_ROLES: dict[str, set[str]] = {
     "/persons": {"admin", "manager", "secretary"},
     "/pricing": {"admin", "manager", "secretary", "doctor", "assistant", "employee"},
@@ -59,11 +58,9 @@ def is_token_expired(token: str | None) -> bool:
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         token = app.storage.user.get("token")
-
         if app.storage.user.get("authenticated", False) and is_token_expired(token):
             app.storage.user["authenticated"] = False
             app.storage.user["token"] = None
-
         path = request.url.path
         if not app.storage.user.get("authenticated", False):
             if path not in ["/login"] and not path.startswith(("/_nicegui", "/assets")):
@@ -72,7 +69,6 @@ class AuthMiddleware(BaseHTTPMiddleware):
             role = (app.storage.user.get("role") or "").lower()
             if not role_allows(path, role):
                 return RedirectResponse("/home")
-
         return await call_next(request)
 
 
@@ -86,7 +82,6 @@ def frame(page_title: str, active_route: str):
     ui.page_title(page_title)
     ui.query("body").classes("bg-white")
     ui.query(".nicegui-content").classes("pb-32")
-
     create_sidebar(active_route=active_route)
 
     async def check_session():
@@ -97,12 +92,11 @@ def frame(page_title: str, active_route: str):
             if me:
                 app.storage.user["role"] = me["role"]["name"].capitalize()
                 app.storage.user["person_id"] = me["person"]["id"]
-
         except httpx.HTTPStatusError as e:
             if e.response.status_code in (401, 403):
                 return _logout("Your access has changed. Please log in again.")
         except Exception:
-            pass # transient network error: retry on next tick
+            pass  # transient network error: retry on next tick
 
     def _logout(msg: str):
         app.storage.user["authenticated"] = False
@@ -110,6 +104,7 @@ def frame(page_title: str, active_route: str):
         ui.notify(msg, type="warning")
         ui.navigate.to("/login")
 
+    ui.timer(0.0, check_session, once=True)
     ui.timer(60.0, check_session)
 
     with ui.column().classes("w-full max-w-7xl mx-auto overflow-y-auto"):
@@ -194,7 +189,7 @@ ui.run(
     title="Syntria",
     storage_secret=storage_secret,
     port=int(os.getenv("NICEGUI_PORT", 8080)),
-    host="0.0.0.0",  # nosec B104 (container, nginx is the only ingress)
+    host="0.0.0.0",
     reload=os.getenv("NICEGUI_RELOAD", "false").lower() == "true",
     show=False,
     favicon="app/assets/icons/syntria_logo.svg",

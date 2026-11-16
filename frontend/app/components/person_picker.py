@@ -29,7 +29,7 @@ class PersonPicker:
 
     async def _on_search(self, e):
         q = (e.value or "").strip()
-        if len(q) < 2:
+        if len(q) < 3:
             return
         found = await PersonsClient.search_persons(q)
         for p in found:

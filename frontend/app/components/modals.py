@@ -1,8 +1,10 @@
-from nicegui import ui
 from datetime import datetime, timezone, timedelta, date
+import os
+from zoneinfo import ZoneInfo
+
+from nicegui import ui
 
 from components.style import Style
-
 from api_client.services import ServicesClient
 from api_client.persons import PersonsClient
 from api_client.users import UsersClient
@@ -11,6 +13,8 @@ from api_client.agenda import AgendaClient
 
 from components.calendar import Calendar
 from components.person_picker import PersonPicker
+
+CLINIC_TZ = ZoneInfo(os.getenv("CLINIC_TZ", "Europe/Rome"))
 
 
 def delete_on_close(dialog):
@@ -357,13 +361,13 @@ async def reservation_modal(
                     )
                     return
 
-                # Construct the payload using the true YYYY-MM-DD state format
+                # Construct the payload using clinic-local wall-clock time
+                start_dt = datetime.strptime(
+                    f"{res_state['date']} {time.value}", "%Y-%m-%d %H:%M"
+                ).replace(tzinfo=CLINIC_TZ)
+
                 reservation = {
-                    "reservation_date": datetime.strptime(
-                        f"{res_state['date']} {time.value}", "%Y-%m-%d %H:%M"
-                    )
-                    .replace(tzinfo=timezone.utc)
-                    .strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+                    "reservation_date": start_dt.isoformat(),
                     "duration_minutes": int(duration.value),
                     "description": description.value,
                     "patient_id": patient.value,

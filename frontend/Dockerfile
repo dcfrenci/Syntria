@@ -12,12 +12,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.lock .
-RUN pip install -r requirements.lock
+RUN pip install --require-hashes -r requirements.lock
 
 RUN useradd --system --uid 10001 --no-create-home appuser \
- && mkdir -p /data/nicegui && chown appuser:appuser /data/nicegui
+    && mkdir -p /data/nicegui && chown appuser:appuser /data/nicegui
+
 COPY --chown=appuser:appuser . .
+
 USER appuser
 
 EXPOSE 8080
+
 CMD ["python", "app/main.py"]

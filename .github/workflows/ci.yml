@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:15
+        image: postgres:16-alpine
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: tttttttttttttttt
@@ -53,6 +53,8 @@ jobs:
       API_BASE_URL: http://127.0.0.1:18081/api/v1
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@0b9264197022ca95e263d9134a65ef84ed97efd6
+        with: { python-version: "3.12" }
       - run: ./scripts/gen-env.sh
       - run: |
           echo "ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
@@ -60,6 +62,13 @@ jobs:
       - run: docker compose up -d --build --wait --wait-timeout 240 nginx
       - run: docker compose exec -T -e ADMIN_PASSWORD api python -m app.cli bootstrap
       - run: docker compose exec -T api alembic check
+      - name: Validate Alembic README stamp revision
+        run: |
+          HEAD_REV=$(docker compose exec -T api alembic heads | awk '{print $1}')
+          if ! grep -q "alembic stamp ${HEAD_REV}" README.md; then
+            echo "Error: README.md stamp revision does not match alembic head (${HEAD_REV})"
+            exit 1
+          fi
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/initialize.py --pre-filled && python scripts/role_testing.py
       - if: failure()

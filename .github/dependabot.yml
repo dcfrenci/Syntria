@@ -1,24 +1,36 @@
 version: 2
 updates:
-  # Maintain GitHub Actions pinned commit SHAs
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-
-  # Maintain Python dependencies
   - package-ecosystem: "pip"
     directory: "/api"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "pip"
-    directory: "/scripts"
+    directory: "/frontend"
     schedule:
       interval: "weekly"
 
-  # Maintain Docker base images & compose setups
   - package-ecosystem: "docker"
+    directory: "/api"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker"
+    directory: "/backup"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"

@@ -1,12 +1,13 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
 from app.core.database import get_db
 from app.core.config import settings
 from app.services.privileges import _guard, _is_admin, _active_admin_count
+from app.services.audit import audit
 from app.models import User, Person, ReminderPreference, Quote, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.schemas.persons import (
@@ -16,15 +17,17 @@ from app.schemas.persons import (
 )
 
 router = APIRouter(prefix="/persons", tags=["Persons"])
-
 allow_read = RoleChecker(["admin", "manager", "secretary", "doctor", "assistant"])
 allow_write = RoleChecker(["admin", "manager", "secretary", "doctor"])
 allow_delete = RoleChecker(["admin", "manager"])
+audit_log = logging.getLogger("syntria.audit")
 
 
 def _hide_admin(person: Person, actor: User) -> None:
-    """Non-admins must not see, edit or delete the system admin's Person record."""
-    if person.email.lower() == settings.ADMIN_EMAIL.lower() and actor.role.name.lower() != "admin":
+    if (
+        person.email.lower() == settings.ADMIN_EMAIL.lower()
+        and actor.role.name.lower() != "admin"
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Person not found.")
 
 
@@ -35,13 +38,14 @@ async def create_person(
     current_user: User = Depends(allow_write),
 ):
     email = payload.email.lower()
-    exists = await db.execute(select(Person.id).where(func.lower(Person.email) == email))
+    exists = await db.execute(
+        select(Person.id).where(func.lower(Person.email) == email)
+    )
     if exists.first():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"A person with email '{email}' already exists.",
         )
-
     if payload.reminder_preference_id:
         pref = await db.get(ReminderPreference, payload.reminder_preference_id)
         if not pref:
@@ -49,12 +53,12 @@ async def create_person(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Reminder preference ID {payload.reminder_preference_id} not found.",
             )
-
     payload_data = {**payload.model_dump(), "email": email}
     person = Person(**payload_data)
     db.add(person)
     await db.flush()
     await db.refresh(person, ["reminder_preference"])
+    await audit(db, current_user, "person.create", "person", person.id)
     return person
 
 
@@ -70,18 +74,14 @@ async def get_persons(
 ):
     role = current_user.role.name.lower()
     is_restricted = role in ("doctor", "assistant")
-
-    # Restrict doctors and assistants to targeted searches
     if is_restricted:
         if not search or len(search.strip()) < 3:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, 
-                detail="Search term (min 3 chars) required."
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Search term (min 3 chars) required.",
             )
         limit = min(limit, 20)
-
     filters = []
-
     if search:
         for token in search.split()[:5]:
             esc = token.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -94,43 +94,32 @@ async def get_persons(
                     Person.phone_number.ilike(pat, escape="\\"),
                 )
             )
-
     if role != "admin":
         filters.append(func.lower(Person.email) != settings.ADMIN_EMAIL.lower())
-
     query = select(Person).options(selectinload(Person.reminder_preference))
     count_query = select(func.count(Person.id))
-
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
-
     total = (await db.execute(count_query)).scalar_one()
     query = (
         query.order_by(Person.last_name, Person.first_name).offset(skip).limit(limit)
     )
     persons = (await db.execute(query)).scalars().all()
-
-    # Return brief schema and audit the read for restricted roles
+    await audit(db, current_user, "person.list", "person")
     if is_restricted:
-        # Assuming an AuditLog model exists in your models directory
-        from app.models import AuditLog 
-        
-        audit_entry = AuditLog(
-            user_id=current_user.id,
-            action="SEARCH_PERSONS_LIST",
-            details=f"Doctor/Assistant searched persons list with term: '{search}'"
+        audit_log.info(
+            "persons.search user=%s role=%s term_len=%d hits=%d",
+            current_user.id,
+            role,
+            len(search),
+            len(persons),
         )
-        db.add(audit_entry)
-        await db.flush()
-
-        # Return a brief schema: id, first_name, last_name
         brief_persons = [
             {"id": p.id, "first_name": p.first_name, "last_name": p.last_name}
             for p in persons
         ]
         return {"total": total, "persons": brief_persons}
-
     return {"total": total, "persons": persons}
 
 
@@ -176,7 +165,6 @@ async def get_person(
         )
         if not related:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Person not found.")
-
     person = (
         await db.execute(
             select(Person)
@@ -184,13 +172,13 @@ async def get_person(
             .where(Person.id == person_id)
         )
     ).scalar_one_or_none()
-
     if not person:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Person with ID {person_id} not found.",
         )
     _hide_admin(person, current_user)
+    await audit(db, current_user, "person.read", "person", person.id)
     return person
 
 
@@ -212,34 +200,31 @@ async def update_person(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )
-
     person = (
         await db.execute(
             select(Person)
             .options(
-                selectinload(Person.reminder_preference), 
-                selectinload(Person.user_account)
+                selectinload(Person.reminder_preference),
+                selectinload(Person.user_account),
             )
             .where(Person.id == person_id)
         )
     ).scalar_one_or_none()
-
     if not person:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Person with ID {person_id} not found.",
         )
     _hide_admin(person, current_user)
-
     update_data = payload.model_dump(exclude_unset=True)
-
-    # Privilege guard: Prevent lower roles from changing higher-role login emails
-    if person.user_account and person.id != current_user.person_id and "email" in update_data:
+    if (
+        person.user_account
+        and person.id != current_user.person_id
+        and "email" in update_data
+    ):
         await _guard(db, current_user, target=person.user_account)
-
     if "email" in update_data:
         update_data["email"] = update_data["email"].lower()
-
     if (
         person.email.lower() == settings.ADMIN_EMAIL.lower()
         and "email" in update_data
@@ -249,7 +234,6 @@ async def update_person(
             status.HTTP_400_BAD_REQUEST,
             detail="The admin email is bound to ADMIN_EMAIL; change it in .env and in the database together.",
         )
-
     if "email" in update_data and update_data["email"] != person.email.lower():
         email_collision = await db.execute(
             select(Person.id).where(
@@ -261,8 +245,6 @@ async def update_person(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Email '{update_data['email']}' is already in use.",
             )
-
-    # Validate reminder preference if updating
     if (
         "reminder_preference_id" in update_data
         and update_data["reminder_preference_id"] is not None
@@ -273,13 +255,12 @@ async def update_person(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Reminder preference ID {update_data['reminder_preference_id']} not found.",
             )
-
     for field, value in update_data.items():
         setattr(person, field, value)
-
     await db.flush()
     await db.refresh(person)
     await db.refresh(person, ["reminder_preference"])
+    await audit(db, current_user, "person.update", "person", person.id)
     return person
 
 
@@ -300,20 +281,20 @@ async def delete_person(
             status.HTTP_400_BAD_REQUEST,
             detail="The system admin person cannot be deleted.",
         )
-    
-    # Prevent bypass of admin and rank guards via cascading deletes
     target_user = (
         await db.execute(select(User).where(User.person_id == person_id))
     ).scalar_one_or_none()
-    
     if target_user:
         await _guard(db, current_user, target=target_user)
-        if _is_admin(target_user) and target_user.is_active and await _active_admin_count(db) <= 1:
+        if (
+            _is_admin(target_user)
+            and target_user.is_active
+            and await _active_admin_count(db) <= 1
+        ):
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, 
-                detail="Cannot delete the last active admin."
+                status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the last active admin.",
             )
-    
     await db.delete(person)
     try:
         await db.flush()
@@ -322,4 +303,5 @@ async def delete_person(
             status.HTTP_409_CONFLICT,
             detail="Cannot delete person with linked quotes or reservations. Anonymise or reassign records first.",
         )
+    await audit(db, current_user, "person.delete", "person", person_id)
     return None

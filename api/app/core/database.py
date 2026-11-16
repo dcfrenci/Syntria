@@ -1,5 +1,4 @@
 from collections.abc import AsyncGenerator
-
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -14,8 +13,15 @@ engine = create_async_engine(
     settings.database_url,
     echo=False,
     pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=5,
+    pool_size=10,
+    max_overflow=10,
+    pool_timeout=10,
+    connect_args={
+        "server_settings": {
+            "statement_timeout": "15000",
+            "idle_in_transaction_session_timeout": "30000",
+        }
+    },
 )
 
 # Async session factory

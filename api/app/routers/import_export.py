@@ -8,15 +8,14 @@ import csv
 from decimal import Decimal
 from typing import Literal, get_args
 from collections import OrderedDict
-
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-
 from app.services.scheduling import find_conflict, lock_schedule
+from app.services.audit import audit
 from app.core.database import get_db
 from app.core.config import settings
 from app.models import (
@@ -35,11 +34,8 @@ from app.schemas.presets import ComponentSchema, MarginSchema
 from app.schemas.quotes import QuoteStatus
 
 router = APIRouter(prefix="/import_export", tags=["Import & Export"])
-
 allow_admin_mgr = RoleChecker(["admin", "manager"])
-
 log = logging.getLogger("syntria.import_export")
-
 Entity = Literal["quotes", "items", "reservations", "presets"]
 
 
@@ -75,7 +71,6 @@ class CommitPayload(BaseModel):
     batch_id: str | None = Field(default=None, min_length=8, max_length=64)
 
 
-# --- CSV formula injection guard: cells starting with these are executed by Excel/LibreOffice ---
 _CSV_TRIGGERS = ("=", "+", "-", "@", "\t", "\r")
 
 
@@ -83,7 +78,7 @@ def _csv_safe(v):
     return "'" + v if isinstance(v, str) and v.startswith(_CSV_TRIGGERS) else v
 
 
-def _csv_unsafe(v):  # reverses _csv_safe on import so round-trips are lossless
+def _csv_unsafe(v):
     if isinstance(v, str) and v.startswith("'") and v[1:].startswith(_CSV_TRIGGERS):
         return v[1:]
     return v
@@ -106,7 +101,6 @@ def parse_datetime(val):
 
 
 def _clean_row(entity: str, data: dict) -> dict:
-    """Re-validate untrusted commit data with the same rules as the normal API."""
     try:
         if data.get("id") is not None:
             data["id"] = int(data["id"])
@@ -125,7 +119,6 @@ def _clean_row(entity: str, data: dict) -> dict:
             data["price"] = price
             data["is_active"] = _as_bool(data.get("is_active"), True)
             data["is_specific"] = _as_bool(data.get("is_specific"), False)
-
         elif entity == "quotes":
             if data.get("status", "Draft") not in get_args(QuoteStatus):
                 raise ValueError("status")
@@ -155,7 +148,6 @@ def _clean_row(entity: str, data: dict) -> dict:
             data["items"] = items
             data["total_amount"] = total
             data["valid_until"] = parse_date(data.get("valid_until"))
-
         elif entity == "reservations":
             start = parse_datetime(data.get("reservation_date"))
             if not isinstance(start, datetime.datetime) or start.tzinfo is None:
@@ -173,7 +165,6 @@ def _clean_row(entity: str, data: dict) -> dict:
                 isinstance(s, dict) and s.get("id") for s in staff
             ):
                 raise ValueError("staff")
-
         elif entity == "presets":
             data["is_active"] = _as_bool(data.get("is_active"), False)
             if not 1 <= len(str(data.get("name") or "")) <= 100:
@@ -210,15 +201,13 @@ _MODELS = {
 
 
 def _parse_csv(contents: bytes) -> list[dict]:
-    csv.field_size_limit(
-        8_000_000
-    )  # default 128 KB would reject presets with embedded images
+    csv.field_size_limit(8_000_000)
     reader = csv.DictReader(io.StringIO(contents.decode("utf-8-sig")))
     rows: list[dict] = []
     for raw in reader:
         if len(rows) >= 5000:
             raise ValueError("too many rows")
-        raw.pop(None, None)  # extra cells beyond the header
+        raw.pop(None, None)
         rows.append({k: _csv_unsafe(v if v != "" else None) for k, v in raw.items()})
     return rows
 
@@ -288,22 +277,17 @@ def _collect_refs(row: dict, person_ids: set, item_ids: set) -> None:
 async def export_data(
     entity: Entity,
     payload: ExportPayload,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
-    """Exports structured relationships to a flat CSV by serializing entire nested objects as JSON."""
     ids = payload.ids
-
     log.info("export entity=%s count=%d user=%s", entity, len(ids), current_user.id)
-
     if not ids:
         raise HTTPException(400, "No IDs provided for export")
-
     data = []
     is_admin = current_user.role.name.lower() == "admin"
     admin_p = Person.email == settings.ADMIN_EMAIL
     if entity == "quotes":
-        # Deep load all nested models for full serialization
         stmt = (
             select(Quote)
             .where(Quote.id.in_(ids))
@@ -327,7 +311,6 @@ async def export_data(
                 if r.patient
                 else None
             )
-
             staff_data = (
                 {
                     "id": r.staff.id,
@@ -338,7 +321,6 @@ async def export_data(
                 if r.staff
                 else None
             )
-
             items_data = [
                 {
                     "item_id": qi.item_id,
@@ -350,7 +332,6 @@ async def export_data(
                 }
                 for qi in r.quote_items
             ]
-
             data.append(
                 {
                     "id": r.id,
@@ -362,7 +343,6 @@ async def export_data(
                     "items": json.dumps(items_data),
                 }
             )
-
     elif entity == "items":
         stmt = select(Item).where(Item.id.in_(ids)).options(selectinload(Item.category))
         for r in (await db.execute(stmt)).scalars().all():
@@ -380,7 +360,6 @@ async def export_data(
                     "is_specific": r.is_specific,
                 }
             )
-
     elif entity == "reservations":
         stmt = (
             select(Reservation)
@@ -401,12 +380,10 @@ async def export_data(
                 if r.patient
                 else None
             )
-
             staff_data = [
                 {"id": s.id, "first_name": s.first_name, "last_name": s.last_name}
                 for s in r.staff
             ]
-
             data.append(
                 {
                     "id": r.id,
@@ -417,7 +394,6 @@ async def export_data(
                     "staff": json.dumps(staff_data),
                 }
             )
-
     elif entity == "presets":
         stmt = select(Preset).where(Preset.id.in_(ids))
         for r in (await db.execute(stmt)).scalars().all():
@@ -430,10 +406,10 @@ async def export_data(
                     "margins": json.dumps(r.margins),
                 }
             )
-
     else:
         raise HTTPException(400, f"Unsupported export entity: {entity}")
 
+    await audit(db, current_user, f"export.{entity}", entity)
     return Response(
         content=_to_csv(data),
         media_type="text/csv",
@@ -456,7 +432,6 @@ async def validate_import(
     except Exception:
         raise HTTPException(400, "Failed to parse CSV (max 5000 rows).")
 
-    # pass 1: decode nested JSON columns
     row_errors: list[list[str]] = []
     for row in rows:
         errs = []
@@ -468,10 +443,10 @@ async def validate_import(
                     errs.append(f"Invalid JSON format in '{col}' column.")
         row_errors.append(errs)
 
-    # pass 2: one query per table instead of one per row
     person_ids, item_ids = set(), set()
     for row in rows:
         _collect_refs(row, person_ids, item_ids)
+
     found = await _existing(db, _MODELS[entity], (r.get("id") for r in rows))
     ok_persons = await _visible_persons(db, person_ids, current_user)
     ok_items = await _existing(db, Item, item_ids)
@@ -484,7 +459,6 @@ async def validate_import(
             status = "error"
         elif _as_int(row_id) in found:
             status = "conflict"
-
         if entity in ("quotes", "reservations"):
             p = row.get("patient")
             pid = p.get("id") if isinstance(p, dict) else None
@@ -504,7 +478,6 @@ async def validate_import(
                 sid = s.get("id") if isinstance(s, dict) else None
                 if _as_int(sid) not in ok_persons:
                     errors.append(f"Staff ID {sid} does not exist.")
-
         results.append(
             {
                 "row_id": row_id,
@@ -519,12 +492,10 @@ async def validate_import(
 async def _do_commit(
     entity: Entity,
     payload: CommitPayload,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
-    """Executes bulk inserts and updates within a single transaction from serialized nested objects."""
     actions = payload.actions
-
     person_ids, item_ids = set(), set()
     for act in actions:
         if act.selected_action in ("new", "update"):
@@ -538,15 +509,11 @@ async def _do_commit(
     for act in actions:
         action = act.selected_action
         data = act.data
-
         if action == "keep" or action == "ignore":
             continue
-
         if action == "new":
-            data.pop("id", None)  # Let the DB assign a fresh ID
-
+            data.pop("id", None)
         data = _clean_row(entity, data)
-
         if action == "update":
             target_id = _as_int(data.get("id"))
             if target_id is None or await db.get(_MODELS[entity], target_id) is None:
@@ -596,7 +563,6 @@ async def _do_commit(
                     if action == "update"
                     else Quote()
                 )
-
                 db_obj.patient_id = (
                     data.get("patient", {}).get("id")
                     if isinstance(data.get("patient"), dict)
@@ -607,15 +573,12 @@ async def _do_commit(
                     if isinstance(data.get("staff"), dict)
                     else None
                 )
-
                 db_obj.status = data.get("status", "Draft")
                 db_obj.total_amount = data.get("total_amount", 0)
                 db_obj.valid_until = parse_date(data.get("valid_until"))
-
                 if action == "new":
                     db.add(db_obj)
                 await db.flush()
-
                 if "items" in data and isinstance(data["items"], list):
                     if action == "update":
                         await db.execute(
@@ -632,7 +595,6 @@ async def _do_commit(
                                 teeth=itm.get("teeth"),
                             )
                         )
-
             elif entity == "items":
                 db_obj = (
                     await db.get(Item, data.get("id")) if action == "update" else Item()
@@ -649,14 +611,12 @@ async def _do_commit(
                 db_obj.is_specific = data.get("is_specific", False)
                 if action == "new":
                     db.add(db_obj)
-
             elif entity == "reservations":
                 db_obj = (
                     await db.get(Reservation, data.get("id"))
                     if action == "update"
                     else Reservation()
                 )
-
                 db_obj.patient_id = (
                     data.get("patient", {}).get("id")
                     if isinstance(data.get("patient"), dict)
@@ -665,11 +625,9 @@ async def _do_commit(
                 db_obj.reservation_date = parse_datetime(data.get("reservation_date"))
                 db_obj.duration_minutes = data.get("duration_minutes", 30)
                 db_obj.description = data.get("description")
-
                 if action == "new":
                     db.add(db_obj)
                 await db.flush()
-
                 if "staff" in data and isinstance(data["staff"], list):
                     staff_ids = [s.get("id") for s in data["staff"] if s.get("id")]
                     staff_members = (
@@ -683,7 +641,6 @@ async def _do_commit(
                     )
                     db_obj.staff.clear()
                     db_obj.staff.extend(staff_members)
-
             elif entity == "presets":
                 await check_image_refs(db, data.get("elements"))
                 if data.get("is_active", False):
@@ -703,7 +660,6 @@ async def _do_commit(
                 if action == "new":
                     db.add(db_obj)
                 await db.flush()
-
         except Exception:
             await db.rollback()
             log.exception("import commit failed for %s", entity)
@@ -711,11 +667,11 @@ async def _do_commit(
                 500, f"Import aborted on a {entity} record. Nothing was saved."
             )
 
+    await audit(db, current_user, f"import.{entity}", entity)
     await db.commit()
     return {"message": f"Successfully processed {len(actions)} records."}
 
 
-# In-memory, like the login throttle: valid because the API runs a single worker.
 _batches: "OrderedDict[str, None]" = OrderedDict()
 
 
@@ -723,7 +679,7 @@ _batches: "OrderedDict[str, None]" = OrderedDict()
 async def commit_import(
     entity: Entity,
     payload: CommitPayload,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(allow_admin_mgr),
 ):
     key = f"{current_user.id}:{payload.batch_id}" if payload.batch_id else None
@@ -737,5 +693,5 @@ async def commit_import(
         return await _do_commit(entity, payload, db, current_user)
     except BaseException:
         if key:
-            _batches.pop(key, None)  # failed and rolled back: allow a retry
+            _batches.pop(key, None)
         raise

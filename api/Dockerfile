@@ -10,12 +10,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.lock .
-RUN pip install -r requirements.lock
+RUN pip install --require-hashes -r requirements.lock
 
 RUN useradd --system --uid 1000 --no-create-home appuser
+
 COPY --chown=appuser:appuser alembic.ini .
 COPY --chown=appuser:appuser migrations ./migrations
 COPY --chown=appuser:appuser app ./app
+
 USER appuser
 
 EXPOSE 8000

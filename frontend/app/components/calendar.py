@@ -1,6 +1,10 @@
-from nicegui import ui
-from typing import Literal, Any
+import os
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
+from typing import Literal, Any
+from nicegui import ui
+
+CLINIC_TZ = ZoneInfo(os.getenv("CLINIC_TZ", "Europe/Rome"))
 
 
 class Calendar:
@@ -31,7 +35,8 @@ class Calendar:
             return split
 
         for res in reservations:
-            dt = datetime.fromisoformat(res["reservation_date"].replace("Z", "+00:00"))
+            # Parse ISO string and convert to clinic timezone
+            dt = datetime.fromisoformat(res["reservation_date"]).astimezone(CLINIC_TZ)
             res_date = dt.date()
             if res_date not in split:
                 split[res_date] = []

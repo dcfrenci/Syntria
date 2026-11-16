@@ -1,6 +1,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 import asyncio
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
@@ -75,7 +76,7 @@ async def get_my_profile(current_user: User = Depends(allow_all_authenticated)):
 
 @router.get("/", response_model=UserListResponse, status_code=status.HTTP_200_OK)
 async def list_users(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
     role: str | None = Query(default=None, max_length=50),
@@ -111,29 +112,20 @@ async def list_users(
 @router.get("/reservations", response_model=ReservationListResponse)
 async def get_reservations(
     start_date: date = Query(..., description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(
-        None,
-        description="End date (YYYY-MM-DD). Default: the Mon-Sun week of start_date",
-    ),
-    user_id: Optional[int] = Query(
-        None,
-        description="PERSON id to look up (doctor or patient). Default: the logged-in user's person.",
-    ),
-    db: AsyncSession = Depends(get_db),
+    end_date: Optional[date] = Query(None),
+    user_id: Optional[int] = Query(None),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     """Reservations where the target person is staff or patient."""
     role = current_user.role.name.lower()
     privileged_roles = ["admin", "manager", "secretary"]
     standard_roles = ["doctor", "assistant", "employee", "client"]
-
     if role not in privileged_roles + standard_roles:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-
     target_person_id = user_id if user_id is not None else current_user.person_id
-
     if target_person_id != current_user.person_id:
         if role not in privileged_roles:
             raise HTTPException(
@@ -145,18 +137,17 @@ async def get_reservations(
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, detail="Target person not found."
             )
-
     if end_date is None:
         active_start = start_date - timedelta(days=start_date.weekday())
         active_end = active_start + timedelta(days=6)
     else:
         active_start, active_end = start_date, end_date
 
-    range_start = datetime.combine(active_start, time.min, tzinfo=timezone.utc)
+    clinic_tz = ZoneInfo(settings.CLINIC_TZ)
+    range_start = datetime.combine(active_start, time.min, tzinfo=clinic_tz)
     range_end = datetime.combine(
-        active_end + timedelta(days=1), time.min, tzinfo=timezone.utc
+        active_end + timedelta(days=1), time.min, tzinfo=clinic_tz
     )
-
     query = (
         select(Reservation)
         .where(
@@ -176,7 +167,7 @@ async def get_reservations(
 @router.get("/{user_id}", response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def get_user(
     user_id: int,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_db, scope="function"),
     current_user: User = Depends(get_current_user),
 ):
     role = current_user.role.name.lower()

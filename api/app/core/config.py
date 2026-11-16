@@ -1,5 +1,4 @@
 from urllib.parse import quote_plus
-
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -10,13 +9,12 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
-
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 2
-
     # Identifier of the system admin account (the password is never stored in config)
     ADMIN_EMAIL: str
+    CLINIC_TZ: str = "Europe/Rome"
     ENABLE_DOCS: bool = False
     LOG_LEVEL: str = "INFO"
 
@@ -40,13 +38,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
-    
+
     @field_validator("POSTGRES_PASSWORD")
     @classmethod
     def _strong_db_password(cls, v: str) -> str:
         if len(v) < 16 or v.lower() in ("admin", "password", "postgres"):
             raise ValueError("POSTGRES_PASSWORD must be >= 16 chars and not a default")
         return v
-    
+
 
 settings = Settings()

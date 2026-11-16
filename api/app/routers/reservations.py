@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.models import Person, User, Reservation
 from app.routers.auth import get_current_user, RoleChecker
 from app.services.scheduling import find_conflict, lock_schedule
+from app.services.audit import audit
 from app.schemas.reservations import (
     ReservationCreate,
     ReservationListResponse,
@@ -38,41 +39,32 @@ async def create_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-
     if role == "doctor" and current_user.person_id not in payload.staff_ids:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Self-only access permitted. Must be assigned as staff.",
         )
-
-    # 2. Verify patient exists
     patient = await db.get(Person, payload.patient_id)
     if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
         )
-
-    # 4. Verify staff exist and check Staff double-booking
     staff_members = (
         (await db.execute(select(Person).where(Person.id.in_(payload.staff_ids))))
         .scalars()
         .all()
     )
-
     if len(staff_members) != len(set(payload.staff_ids)):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="One or more staff IDs are invalid.",
         )
-
     if role != "admin" and (
         patient.email.lower() == settings.ADMIN_EMAIL.lower()
         or any(s.email.lower() == settings.ADMIN_EMAIL.lower() for s in staff_members)
     ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Patient not found.")
-
     await lock_schedule(db)
-
     msg = await find_conflict(
         db,
         payload.reservation_date,
@@ -82,8 +74,6 @@ async def create_reservation(
     )
     if msg:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
-
-    # 5. Create Reservation
     reservation = Reservation(
         patient_id=payload.patient_id,
         reservation_date=payload.reservation_date,
@@ -91,11 +81,10 @@ async def create_reservation(
         description=payload.description,
     )
     reservation.staff.extend(staff_members)
-
     db.add(reservation)
     await db.flush()
     await db.refresh(reservation)
-
+    await audit(db, current_user, "reservation.create", "reservation", reservation.id)
     return reservation
 
 
@@ -114,27 +103,23 @@ async def get_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-
     reservation = await db.get(Reservation, reservation_id)
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
-
     _assert_visible(reservation, role)
-
     if role in ["doctor", "assistant"] and current_user.person_id not in [
         s.id for s in reservation.staff
     ]:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )
-
     if role == "client" and reservation.patient_id != current_user.person_id:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )
-
+    await audit(db, current_user, "reservation.read", "reservation", reservation.id)
     return reservation
 
 
@@ -154,45 +139,35 @@ async def update_reservation(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-
     await lock_schedule(db)
-
     reservation = await db.get(Reservation, reservation_id)
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
-
     _assert_visible(reservation, role)
-
     if role == "doctor" and current_user.person_id not in [
         s.id for s in reservation.staff
     ]:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Self-only access permitted."
         )
-
     update_data = payload.model_dump(exclude_unset=True)
-
-    # Calculate proposed new values (falling back to current values if not updated)
     target_date = update_data.get("reservation_date", reservation.reservation_date)
     target_duration = update_data.get("duration_minutes", reservation.duration_minutes)
     target_patient_id = update_data.get("patient_id", reservation.patient_id)
     target_staff_ids = update_data.get("staff_ids", [s.id for s in reservation.staff])
-
     if role == "doctor" and current_user.person_id not in target_staff_ids:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             detail="Self-only access permitted. Must be assigned as staff.",
         )
-
     if "patient_id" in update_data:
         patient = await db.get(Person, target_patient_id)
         if not patient:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found."
             )
-
     if "staff_ids" in update_data:
         staff_members = (
             (await db.execute(select(Person).where(Person.id.in_(target_staff_ids))))
@@ -204,7 +179,6 @@ async def update_reservation(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="One or more staff IDs are invalid.",
             )
-
     if any(
         k in update_data
         for k in ("reservation_date", "duration_minutes", "patient_id", "staff_ids")
@@ -219,12 +193,9 @@ async def update_reservation(
         )
         if msg:
             raise HTTPException(status.HTTP_409_CONFLICT, detail=msg)
-
     if "staff_ids" in update_data:
         reservation.staff.clear()
         reservation.staff.extend(staff_members)
-
-    # 3. Apply standard scalar updates
     if "description" in update_data:
         reservation.description = update_data["description"]
     if "reservation_date" in update_data:
@@ -233,10 +204,9 @@ async def update_reservation(
         reservation.duration_minutes = update_data["duration_minutes"]
     if "patient_id" in update_data:
         reservation.patient_id = update_data["patient_id"]
-
     await db.flush()
     await db.refresh(reservation)
-
+    await audit(db, current_user, "reservation.update", "reservation", reservation.id)
     return reservation
 
 
@@ -252,10 +222,8 @@ async def get_reservations(
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, detail="Insufficient privileges."
         )
-
     query = select(Reservation).order_by(Reservation.reservation_date.desc())
     count_query = select(func.count(Reservation.id))
-
     if role in ["doctor", "assistant"]:
         query = query.where(Reservation.staff.any(id=current_user.person_id))
         count_query = count_query.where(
@@ -266,14 +234,12 @@ async def get_reservations(
         count_query = count_query.where(
             Reservation.patient_id == current_user.person_id
         )
-
     if role != "admin":
         hide = ~Reservation.patient.has(Person.email == settings.ADMIN_EMAIL)
         query, count_query = query.where(hide), count_query.where(hide)
-
     total = (await db.execute(count_query)).scalar_one()
     reservations = (await db.execute(query.offset(skip).limit(limit))).scalars().all()
-
+    await audit(db, current_user, "reservation.list", "reservation")
     return {"total": total, "reservations": reservations}
 
 
@@ -288,9 +254,8 @@ async def delete_reservation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Reservation not found."
         )
-
     role = current_user.role.name.lower()
     _assert_visible(reservation, role)
-
     await db.delete(reservation)
+    await audit(db, current_user, "reservation.delete", "reservation", reservation_id)
     return None
