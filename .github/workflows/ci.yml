@@ -27,7 +27,7 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.x
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v5.x
       - uses: actions/setup-python@0b9264197022ca95e263d9134a65ef84ed97efd6 # v6.x
         with: { python-version: "3.12" }
       - run: pip install --require-hashes -r api/requirements.lock
@@ -53,7 +53,7 @@ jobs:
       COMPOSE_PROFILES: ""
       API_BASE_URL: http://127.0.0.1:18081/api/v1
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: actions/setup-python@0b9264197022ca95e263d9134a65ef84ed97efd6
         with: { python-version: "3.12" }
       - run: ./scripts/gen-env.sh
