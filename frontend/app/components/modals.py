@@ -319,19 +319,14 @@ async def reservation_modal(
                 doctor.value = doctor_ids[0]
             extra_staff["ids"] = [i for i in staff_ids if i not in doctor_ids[:1]]
 
-            # Setup the custom date picker state
-            raw_date = datetime.fromisoformat(reservation["reservation_date"]).strftime(
-                "%Y-%m-%d"
-            )
+            # Setup the custom date picker state converted to clinic timezone
+            dt = datetime.fromisoformat(reservation["reservation_date"]).astimezone(CLINIC_TZ)
+            raw_date = dt.strftime("%Y-%m-%d")
             res_state["date"] = raw_date
-            date_sel.value = datetime.strptime(raw_date, "%Y-%m-%d").strftime(
-                "%d/%m/%Y"
-            )
+            date_sel.value = dt.strftime("%d/%m/%Y")
             date_picker.value = raw_date
 
-            time.value = datetime.fromisoformat(
-                reservation["reservation_date"]
-            ).strftime("%H:%M")
+            time.value = dt.strftime("%H:%M")
             # service.value = reservation.get("item", {}).get("id")
             duration.value = reservation["duration_minutes"]
             description.value = reservation["description"]
@@ -416,7 +411,6 @@ async def reservation_modal(
             )
 
     return delete_on_close(dialog)
-
 
 def confirmation_modal(
     title: str, description: str, on_save_callback, single_use: bool = False

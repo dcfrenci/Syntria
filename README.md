@@ -192,8 +192,9 @@ This seeds the 7 roles and the reminder preferences, then creates the admin `ADM
 
 ```bash
 docker compose up -d db
-docker compose run --rm --no-deps api alembic stamp 0ed7c5002796
-docker compose run --rm --no-deps api alembic check     # must report no drift before starting api
+docker compose run --rm --no-deps api alembic stamp 0ed7c5002796   # baseline only
+docker compose run --rm --no-deps api alembic upgrade head          # adds audit_log
+docker compose run --rm --no-deps api alembic check                 # now must be clean
 ```
 
 Rotate the old `admin/admin` DB credentials as described in `backup/backup_conf.md` ("Existing deployment").

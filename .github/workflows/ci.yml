@@ -30,7 +30,8 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v5.x
       - uses: actions/setup-python@0b9264197022ca95e263d9134a65ef84ed97efd6 # v6.x
         with: { python-version: "3.12" }
-      - run: pip install ruff==0.9.0 pip-audit==2.7.3 bandit==1.8.0 pytest==8.3.4 pytest-asyncio==0.23.5 -r api/requirements.lock
+      - run: pip install --require-hashes -r api/requirements.lock
+      - run: pip install ruff==0.9.0 pip-audit==2.7.3 bandit==1.8.0 pytest==8.3.4 pytest-asyncio==0.23.5
       - run: ruff check --select E9,F63,F7,F82 api frontend scripts
       - run: pip-audit -r api/requirements.lock
       - run: pip-audit -r frontend/requirements.lock
@@ -62,13 +63,10 @@ jobs:
       - run: docker compose up -d --build --wait --wait-timeout 240 nginx
       - run: docker compose exec -T -e ADMIN_PASSWORD api python -m app.cli bootstrap
       - run: docker compose exec -T api alembic check
-      - name: Validate Alembic README stamp revision
+      - name: Validate README stamp revision
         run: |
-          HEAD_REV=$(docker compose exec -T api alembic heads | awk '{print $1}')
-          if ! grep -q "alembic stamp ${HEAD_REV}" README.md; then
-            echo "Error: README.md stamp revision does not match alembic head (${HEAD_REV})"
-            exit 1
-          fi
+          BASE=$(docker compose exec -T api alembic history | awk '/<base>/ {print $3}' | tr -d ',')
+          grep -q "alembic stamp ${BASE}" README.md
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/initialize.py --pre-filled && python scripts/role_testing.py
       - if: failure()

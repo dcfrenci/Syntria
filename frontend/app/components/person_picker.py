@@ -16,7 +16,7 @@ class PersonPicker:
         if initial_id in cache:
             self._options[initial_id] = full_name(cache[initial_id])
         self.search = (
-            ui.input(f"Search {label.lower()} (min 2 characters)")
+            ui.input(f"Search {label.lower()} (min 3 characters)")
             .props("outlined dense clearable debounce=300")
             .classes("w-full")
         )

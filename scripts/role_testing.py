@@ -124,6 +124,13 @@ EXPECTED_ALLOWED = {
     ("GET", "/roles/"): ["Admin", "Manager"],
     ("POST", "/roles/"): ["Admin"],
     ("GET", "/persons/"): ["Admin", "Manager", "Secretary", "Doctor", "Assistant"],
+    ("GET", "/persons/?search=mar"): [
+        "Admin",
+        "Manager",
+        "Secretary",
+        "Doctor",
+        "Assistant",
+    ],
     ("POST", "/persons/"): ["Admin", "Manager", "Secretary", "Doctor"],
     ("GET", "/persons/1"): ["Admin", "Manager", "Secretary", "Doctor", "Assistant"],
     ("PATCH", "/persons/1"): ["Admin", "Manager", "Secretary", "Doctor"],
@@ -271,6 +278,7 @@ def test_all_endpoints(token: str, role_name: str):
         ("POST", "/roles/", {"name": "TestRole"}, None),
         # 4. Persons
         ("GET", "/persons/", None, None),
+        ("GET", "/persons/?search=mar", None, None),
         (
             "POST",
             "/persons/",

@@ -78,6 +78,7 @@ services:
       FASTAPI_PORT: ${FASTAPI_PORT}
       ENABLE_DOCS: ${ENABLE_DOCS:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CLINIC_TZ: ${CLINIC_TZ:-Europe/Rome}
     read_only: true
     cap_drop: [ALL]
     tmpfs:
@@ -115,6 +116,7 @@ services:
       NICEGUI_RELOAD: "false"
       NICEGUI_HTTPS_ONLY: ${NICEGUI_HTTPS_ONLY:-false}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CLINIC_TZ: ${CLINIC_TZ:-Europe/Rome}
     volumes:
       - nicegui_data:/data/nicegui
     read_only: true
